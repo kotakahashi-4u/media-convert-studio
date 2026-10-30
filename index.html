@@ -226,7 +226,7 @@
                             </div>
                         </div>
                         <div class="flex items-center gap-1.5 shrink-0">
-                            <button type="button" onclick="switchInputMode('record', true)" class="text-xs font-medium text-accent-dark hover:bg-accent-light bg-accent-light/60 border border-accent-border px-3 py-1.5 rounded-full transition-colors flex items-center gap-1">
+                            <button type="button" id="reRecordBtn" onclick="switchInputMode('record', true)" class="hidden text-xs font-medium text-accent-dark hover:bg-accent-light bg-accent-light/60 border border-accent-border px-3 py-1.5 rounded-full transition-colors flex items-center gap-1">
                                 <span class="material-symbols-rounded text-base">screen_record</span>
                                 再録画
                             </button>
@@ -520,6 +520,32 @@
         let trimSegments = [{ start: 0, end: 10 }];
         let currentInputMode = 'file'; // 'file' or 'record'
 
+        // モード別（'file' と 'record'）に独立してファイル・トリミング・変換結果の状態を保持するストア
+        const modeSessionStore = {
+            file: {
+                file: null,
+                videoUrl: null,
+                videoDuration: 0,
+                trimSegments: [{ start: 0, end: 10 }],
+                currentTime: 0,
+                resultBlobUrl: null,
+                resultExtension: null,
+                resultMediaType: null,
+                resultSizeText: ''
+            },
+            record: {
+                file: null,
+                videoUrl: null,
+                videoDuration: 0,
+                trimSegments: [{ start: 0, end: 10 }],
+                currentTime: 0,
+                resultBlobUrl: null,
+                resultExtension: null,
+                resultMediaType: null,
+                resultSizeText: ''
+            }
+        };
+
         // 画面録画用の状態
         let screenStream = null;
         let micStream = null;
@@ -549,6 +575,7 @@
         const fileNameDisplay = document.getElementById('fileNameDisplay');
         const fileMetaDisplay = document.getElementById('fileMetaDisplay');
         const changeFileBtn = document.getElementById('changeFileBtn');
+        const reRecordBtn = document.getElementById('reRecordBtn');
         const durationBadge = document.getElementById('durationBadge');
         const segmentsContainer = document.getElementById('segmentsContainer');
         const timelineVisualizer = document.getElementById('timelineVisualizer');
@@ -705,11 +732,52 @@
         }
 
         // --- 入力モード切替 (ファイル選択 / 画面録画) ---
+        function saveCurrentModeSession(mode) {
+            const store = modeSessionStore[mode];
+            if (!store) return;
+            store.file = currentFile;
+            store.videoDuration = videoDuration;
+            store.trimSegments = trimSegments.map(s => ({ ...s }));
+            store.currentTime = sourceVideo.currentTime || 0;
+        }
+
+        function updatePreviewHeaderButtons() {
+            if (currentInputMode === 'record') {
+                reRecordBtn.classList.remove('hidden');
+                changeFileBtn.classList.add('hidden');
+            } else {
+                reRecordBtn.classList.add('hidden');
+                changeFileBtn.classList.remove('hidden');
+            }
+        }
+
+        function restoreResultCardForSession(store) {
+            if (store && store.resultBlobUrl && store.file) {
+                generatedBlobUrl = store.resultBlobUrl;
+                resultFormatBadge.textContent = `.${store.resultExtension.toUpperCase()}`;
+                resultSizeInfo.textContent = store.resultSizeText;
+                const baseName = store.file.name.replace(/\.[^/.]+$/, '');
+                downloadBtn.href = store.resultBlobUrl;
+                downloadBtn.download = `${baseName}_loop.${store.resultExtension}`;
+                renderResultPreviewElement(store.resultBlobUrl, store.resultMediaType);
+                resultCard.classList.remove('hidden');
+            } else {
+                resultCard.classList.add('hidden');
+            }
+        }
+
         function switchInputMode(mode, forceShowInput = false) {
             if (isConverting) return;
-            currentInputMode = mode;
 
+            // タブを切り替える前に、現在のモードの状態を保存
+            if (currentInputMode !== mode) {
+                sourceVideo.pause();
+                saveCurrentModeSession(currentInputMode);
+            }
+
+            currentInputMode = mode;
             const isFile = mode === 'file';
+
             tabFileBtn.className = isFile
                 ? 'btn-ripple py-2.5 px-4 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all bg-accent text-white shadow-sm'
                 : 'btn-ripple py-2.5 px-4 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all text-slate-600 hover:bg-slate-100';
@@ -718,8 +786,53 @@
                 ? 'btn-ripple py-2.5 px-4 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all bg-accent text-white shadow-sm'
                 : 'btn-ripple py-2.5 px-4 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all text-slate-600 hover:bg-slate-100';
 
-            if (forceShowInput || !currentFile) {
+            updatePreviewHeaderButtons();
+
+            // 「再録画」などが明示的に押された場合はそのモードの保持データをクリアして初期画面を表示
+            const targetStore = modeSessionStore[mode];
+            if (forceShowInput) {
+                targetStore.file = null;
+                targetStore.resultBlobUrl = null;
+            }
+
+            // 遷移先モードにファイルが存在する場合は復元、無ければクリーンな初期状態にする
+            if (targetStore && targetStore.file && !forceShowInput) {
+                currentFile = targetStore.file;
+                videoDuration = targetStore.videoDuration || 10;
+                trimSegments = targetStore.trimSegments.map(s => ({ ...s }));
+
+                if (sourceVideo.src !== targetStore.videoUrl) {
+                    sourceVideo.src = targetStore.videoUrl;
+                    sourceVideo.load();
+                    sourceVideo.onloadedmetadata = () => {
+                        sourceVideo.currentTime = Math.min(videoDuration, targetStore.currentTime || 0);
+                        updateTimelinePlayhead();
+                    };
+                }
+
+                const sizeMB = (currentFile.size / (1024 * 1024)).toFixed(2);
+                fileNameDisplay.textContent = currentFile.name;
+                fileMetaDisplay.textContent = `${sizeMB} MB • ${formatDualTimeLabel(videoDuration)}`;
+                timelineMaxLabel.textContent = formatDualTimeLabel(videoDuration);
+
+                renderSegments();
+                updateTimelinePlayhead();
+
+                dropzone.classList.add('hidden');
+                recordStudioCard.classList.add('hidden');
+                previewCard.classList.remove('hidden');
+                restoreResultCardForSession(targetStore);
+
+                convertBtn.disabled = false;
+                updateConvertButtonLabel();
+            } else {
+                // このモードにはまだファイルがないため、プレビューや変換結果を隠して入力画面のみを表示
+                currentFile = null;
+                sourceVideo.pause();
+                sourceVideo.removeAttribute('src');
                 previewCard.classList.add('hidden');
+                resultCard.classList.add('hidden');
+
                 if (isFile) {
                     dropzone.classList.remove('hidden');
                     recordStudioCard.classList.add('hidden');
@@ -727,12 +840,9 @@
                     dropzone.classList.add('hidden');
                     recordStudioCard.classList.remove('hidden');
                 }
-            } else {
-                if (!isFile) {
-                    recordStudioCard.classList.remove('hidden');
-                } else {
-                    recordStudioCard.classList.add('hidden');
-                }
+
+                convertBtn.disabled = true;
+                updateConvertButtonLabel();
             }
         }
 
@@ -1014,8 +1124,9 @@
                         const timestamp = new Date().toTimeString().slice(0, 8).replace(/:/g, '');
                         const file = new File([fixedBlob], `screen_record_${timestamp}.${ext}`, { type: actualMime });
 
+                        currentInputMode = 'record';
                         recordStudioCard.classList.add('hidden');
-                        handleFileSelect(file, recordedElapsed);
+                        handleFileSelect(file, recordedElapsed, 'record');
                         showNotification(
                             '画面録画が完了しました！',
                             'そのまま下で不要な区間をトリミングし、右側のパネルからGIFやMP4などの形式でエクスポートできます。',
@@ -1117,13 +1228,13 @@
             e.preventDefault();
             dropzone.classList.remove('border-accent', 'bg-accent-light/30');
             if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-                handleFileSelect(e.dataTransfer.files[0]);
+                handleFileSelect(e.dataTransfer.files[0], null, 'file');
             }
         });
 
         fileInput.addEventListener('change', (e) => {
             if (e.target.files && e.target.files.length > 0) {
-                handleFileSelect(e.target.files[0]);
+                handleFileSelect(e.target.files[0], null, 'file');
             }
         });
 
@@ -1211,6 +1322,7 @@
 
             renderSegments();
             updateTimelinePlayhead();
+            saveCurrentModeSession(currentInputMode);
         }
 
         // 動画プレイヤーの再生位置と下のタイムラインバーの赤いピン（プレイヘッド）を60fpsで滑らかに完全同期
@@ -1351,11 +1463,27 @@
             });
         }
 
-        function handleFileSelect(file, fallbackDuration = null) {
+        function handleFileSelect(file, fallbackDuration = null, targetMode = currentInputMode) {
             hideNotification();
+            currentInputMode = targetMode;
             currentFile = file;
+            updatePreviewHeaderButtons();
             
+            const store = modeSessionStore[targetMode];
+            if (store && store.videoUrl) {
+                URL.revokeObjectURL(store.videoUrl);
+            }
+            if (store && store.resultBlobUrl) {
+                URL.revokeObjectURL(store.resultBlobUrl);
+                store.resultBlobUrl = null;
+            }
+
             const url = URL.createObjectURL(file);
+            if (store) {
+                store.file = file;
+                store.videoUrl = url;
+            }
+
             sourceVideo.src = url;
             sourceVideo.load();
 
@@ -1368,8 +1496,10 @@
                 }
 
                 syncVideoDurationIfNeeded(dur, true);
+                saveCurrentModeSession(targetMode);
 
                 dropzone.classList.add('hidden');
+                recordStudioCard.classList.add('hidden');
                 previewCard.classList.remove('hidden');
                 resultCard.classList.add('hidden');
 
@@ -1535,6 +1665,7 @@
             const valid = getValidSegments();
             const totalDuration = valid.reduce((acc, s) => acc + (s.end - s.start), 0);
             durationBadge.textContent = `合計: ${roundTenths(totalDuration).toFixed(1)}秒 (${valid.length}区間)`;
+            saveCurrentModeSession(currentInputMode);
 
             // タイムラインバーの描画
             timelineVisualizer.innerHTML = '';
@@ -2152,32 +2283,17 @@
         }
 
         // --- 変換結果の表示＆ダウンロード準備 ---
-        function showConversionResult(blob, extension, mediaType) {
-            if (generatedBlobUrl) {
-                URL.revokeObjectURL(generatedBlobUrl);
-            }
-            generatedBlobUrl = URL.createObjectURL(blob);
-
-            resultFormatBadge.textContent = `.${extension.toUpperCase()}`;
-            const sizeMB = (blob.size / (1024 * 1024)).toFixed(2);
-            const sizeKB = (blob.size / 1024).toFixed(0);
-            resultSizeInfo.textContent = `出力サイズ: ${blob.size > 1024 * 1024 ? sizeMB + ' MB' : sizeKB + ' KB'}`;
-
-            // 元ファイル名から拡張子を付け替え
-            const baseName = currentFile ? currentFile.name.replace(/\.[^/.]+$/, '') : 'converted';
-            downloadBtn.href = generatedBlobUrl;
-            downloadBtn.download = `${baseName}_loop.${extension}`;
-
+        function renderResultPreviewElement(blobUrl, mediaType) {
             resultPreviewContainer.innerHTML = '';
             if (mediaType === 'image') {
                 const img = document.createElement('img');
-                img.src = generatedBlobUrl;
+                img.src = blobUrl;
                 img.alt = 'Converted GIF';
                 img.className = 'max-h-[360px] w-auto rounded-xl object-contain shadow';
                 resultPreviewContainer.appendChild(img);
             } else if (mediaType === 'video') {
                 const vid = document.createElement('video');
-                vid.src = generatedBlobUrl;
+                vid.src = blobUrl;
                 vid.controls = true;
                 vid.loop = true;
                 vid.autoplay = true;
@@ -2189,12 +2305,40 @@
                 audWrapper.className = 'w-full p-6 flex flex-col items-center gap-3 text-white';
                 audWrapper.innerHTML = `<span class="material-symbols-rounded text-5xl text-accent">graphic_eq</span>`;
                 const aud = document.createElement('audio');
-                aud.src = generatedBlobUrl;
+                aud.src = blobUrl;
                 aud.controls = true;
                 aud.className = 'w-full max-w-md';
                 audWrapper.appendChild(aud);
                 resultPreviewContainer.appendChild(audWrapper);
             }
+        }
+
+        function showConversionResult(blob, extension, mediaType) {
+            const store = modeSessionStore[currentInputMode];
+            if (store && store.resultBlobUrl) {
+                URL.revokeObjectURL(store.resultBlobUrl);
+            }
+            generatedBlobUrl = URL.createObjectURL(blob);
+
+            resultFormatBadge.textContent = `.${extension.toUpperCase()}`;
+            const sizeMB = (blob.size / (1024 * 1024)).toFixed(2);
+            const sizeKB = (blob.size / 1024).toFixed(0);
+            const sizeText = `出力サイズ: ${blob.size > 1024 * 1024 ? sizeMB + ' MB' : sizeKB + ' KB'}`;
+            resultSizeInfo.textContent = sizeText;
+
+            if (store) {
+                store.resultBlobUrl = generatedBlobUrl;
+                store.resultExtension = extension;
+                store.resultMediaType = mediaType;
+                store.resultSizeText = sizeText;
+            }
+
+            // 元ファイル名から拡張子を付け替え
+            const baseName = currentFile ? currentFile.name.replace(/\.[^/.]+$/, '') : 'converted';
+            downloadBtn.href = generatedBlobUrl;
+            downloadBtn.download = `${baseName}_loop.${extension}`;
+
+            renderResultPreviewElement(generatedBlobUrl, mediaType);
 
             resultCard.classList.remove('hidden');
             resultCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
