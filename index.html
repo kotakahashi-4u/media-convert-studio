@@ -1,0 +1,2204 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ローカル動画・GIF・音声変換スタジオ</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts & Material Symbols -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,1,0" rel="stylesheet" />
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['"Inter"', '"Noto Sans JP"', 'sans-serif'],
+                    },
+                    colors: {
+                        accent: {
+                            DEFAULT: '#1abc9c',
+                            hover: '#16a085',
+                            light: '#e8f8f5',
+                            border: '#a3e4d7',
+                            dark: '#0e6655'
+                        },
+                        surface: {
+                            DEFAULT: '#ffffff',
+                            variant: '#f8fafc',
+                            container: '#f1f5f9'
+                        }
+                    },
+                    boxShadow: {
+                        'md3-1': '0 1px 2px 0 rgba(0, 0, 0, 0.05), 0 1px 3px 1px rgba(0, 0, 0, 0.05)',
+                        'md3-2': '0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05)',
+                        'md3-accent': '0 4px 14px 0 rgba(26, 188, 156, 0.35)',
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        /* カスタムスクロールバーとレンジスライダーのスタイル */
+        input[type="range"] {
+            accent-color: #1abc9c;
+        }
+        .material-symbols-rounded {
+            font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        /* リップル風アニメーション */
+        .btn-ripple {
+            position: relative;
+            overflow: hidden;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .btn-ripple:active {
+            transform: scale(0.98);
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans min-h-screen flex flex-col selection:bg-accent selection:text-white">
+
+    <!-- Top App Bar (Material Design 3) -->
+    <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+        <div class="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-accent-light text-accent flex items-center justify-center shadow-inner">
+                    <span class="material-symbols-rounded text-2xl">Burst_Mode</span>
+                </div>
+                <div>
+                    <h1 class="text-lg font-bold text-slate-900 tracking-tight flex items-center gap-2">
+                        Media Convert Studio
+                        <span class="text-xs font-medium bg-accent-light text-accent-dark px-2.5 py-0.5 rounded-full border border-accent-border">Local Only</span>
+                    </h1>
+                    <p class="text-xs text-slate-500 hidden sm:block">Googleスライド用ループGIF・各種動画＆音声フォーマット変換</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-2">
+                <div class="flex items-center gap-1.5 text-xs font-medium text-slate-600 bg-slate-100 px-3 py-1.5 rounded-full">
+                    <span class="material-symbols-rounded text-accent text-base">shield_lock</span>
+                    <span>サーバー送信なし・ブラウザ内完結</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8">
+
+        <!-- 通知メッセージボックス（アラート代替） -->
+        <div id="notificationBox" class="hidden mb-6 p-4 rounded-2xl border flex items-start gap-3 transition-all duration-300">
+            <span id="notificationIcon" class="material-symbols-rounded text-xl mt-0.5">info</span>
+            <div class="flex-1 text-sm">
+                <h4 id="notificationTitle" class="font-bold">お知らせ</h4>
+                <p id="notificationMessage" class="mt-0.5 text-slate-600"></p>
+            </div>
+            <button onclick="hideNotification()" class="text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-black/5">
+                <span class="material-symbols-rounded text-lg">close</span>
+            </button>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            
+            <!-- 左カラム：ファイル選択・画面録画＆プレビュー (7 cols) -->
+            <div class="lg:col-span-7 flex flex-col gap-6">
+
+                <!-- 入力ソース切り替えタブ (ファイル選択 or 画面録画) -->
+                <div id="sourceModeTabs" class="bg-white p-1.5 rounded-2xl border border-slate-200 shadow-md3-1 grid grid-cols-2 gap-1.5">
+                    <button type="button" id="tabFileBtn" onclick="switchInputMode('file')" class="btn-ripple py-2.5 px-4 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all bg-accent text-white shadow-sm">
+                        <span class="material-symbols-rounded text-lg">upload_file</span>
+                        ファイルから変換
+                    </button>
+                    <button type="button" id="tabRecordBtn" onclick="switchInputMode('record')" class="btn-ripple py-2.5 px-4 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all text-slate-600 hover:bg-slate-100">
+                        <span class="material-symbols-rounded text-lg">screen_record</span>
+                        画面録画して変換
+                    </button>
+                </div>
+                
+                <!-- ドラッグ＆ドロップ領域 -->
+                <div id="dropzone" class="bg-white rounded-3xl border-2 border-dashed border-slate-300 hover:border-accent transition-all duration-200 p-8 text-center cursor-pointer shadow-md3-1 group relative overflow-hidden">
+                    <input type="file" id="fileInput" accept="video/*,audio/*,.mkv,.flv,.avi,.mov,.webm,.mp4,.m4a" class="hidden">
+                    
+                    <div class="w-16 h-16 rounded-2xl bg-accent-light text-accent mx-auto flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-200">
+                        <span class="material-symbols-rounded text-4xl">cloud_upload</span>
+                    </div>
+                    <h2 class="text-base sm:text-lg font-bold text-slate-800 mb-1">
+                        動画ファイルをここにドロップ、またはクリックして選択
+                    </h2>
+                    <p class="text-xs sm:text-sm text-slate-500 mb-4">
+                        対応入力: MP4, WebM, MOV, MKV, AVI, M4A 等
+                    </p>
+                    <span class="inline-flex items-center gap-1.5 text-xs font-semibold text-accent bg-accent-light px-4 py-2 rounded-full border border-accent-border group-hover:bg-accent group-hover:text-white transition-colors">
+                        <span class="material-symbols-rounded text-base">folder_open</span>
+                        ファイルを選択する
+                    </span>
+                </div>
+
+                <!-- 画面録画スタジオカード -->
+                <div id="recordStudioCard" class="hidden bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 shadow-md3-1 flex flex-col gap-5">
+                    <div class="flex items-start justify-between gap-4">
+                        <div class="flex items-center gap-3">
+                            <div id="recordIconBadge" class="w-12 h-12 rounded-2xl bg-accent-light text-accent flex items-center justify-center shrink-0">
+                                <span class="material-symbols-rounded text-3xl">desktop_windows</span>
+                            </div>
+                            <div>
+                                <h2 class="text-base sm:text-lg font-bold text-slate-800">PC画面・ウィンドウ・タブを録画</h2>
+                                <p class="text-xs text-slate-500">録画完了後、そのままトリミングしてGIFやMP4等にエクスポートできます</p>
+                            </div>
+                        </div>
+                        <span id="recordingTimerBadge" class="hidden items-center gap-1.5 text-xs font-bold text-red-600 bg-red-50 border border-red-200 px-3 py-1.5 rounded-full animate-pulse shrink-0">
+                            <span class="w-2 h-2 rounded-full bg-red-600"></span>
+                            <span id="recordingTimerText">00:00.0</span>
+                        </span>
+                    </div>
+
+                    <!-- 録画ライブプレビュー枠 -->
+                    <div id="liveRecordPreviewWrapper" class="hidden bg-slate-900 rounded-2xl overflow-hidden aspect-video relative flex items-center justify-center shadow-inner">
+                        <video id="liveRecordVideo" class="max-h-full max-w-full" autoplay muted playsinline></video>
+                        <div class="absolute bottom-3 left-3 bg-black/70 backdrop-blur-sm text-white text-[11px] font-medium px-3 py-1 rounded-full flex items-center gap-1.5">
+                            <span class="w-2 h-2 rounded-full bg-red-500 animate-ping"></span>
+                            <span id="liveRecordStatusText">画面キャプチャ中... 操作が終わったら下の「録画を停止」ボタンを押してください</span>
+                        </div>
+                    </div>
+
+                    <!-- 録画設定オプション -->
+                    <div id="recordOptionsPanel" class="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <label class="flex items-center gap-2.5 text-xs font-semibold text-slate-700 cursor-pointer">
+                            <input type="checkbox" id="recordSystemAudio" class="w-4 h-4 rounded text-accent focus:ring-accent accent-[#1abc9c]">
+                            <span class="material-symbols-rounded text-accent text-lg">volume_up</span>
+                            システム/タブ音声を含める
+                        </label>
+                        <label class="flex items-center gap-2.5 text-xs font-semibold text-slate-700 cursor-pointer">
+                            <input type="checkbox" id="recordMicAudio" onchange="onMicCheckboxChange(this)" class="w-4 h-4 rounded text-accent focus:ring-accent accent-[#1abc9c]">
+                            <span class="material-symbols-rounded text-accent text-lg">mic</span>
+                            マイク音声（ナレーション）を含める
+                        </label>
+                    </div>
+
+                    <!-- 録画開始・停止ボタン -->
+                    <div class="flex flex-col sm:flex-row items-center gap-3">
+                        <button type="button" id="startRecordBtn" onclick="startScreenRecording()" class="w-full btn-ripple bg-accent hover:bg-accent-hover text-white font-bold text-sm py-3.5 px-6 rounded-full shadow-md3-accent flex items-center justify-center gap-2 transition-all">
+                            <span class="material-symbols-rounded text-xl">fiber_manual_record</span>
+                            画面を選択して録画を開始する
+                        </button>
+                        <button type="button" id="stopRecordBtn" onclick="stopScreenRecording()" class="hidden w-full btn-ripple bg-red-500 hover:bg-red-600 text-white font-bold text-sm py-3.5 px-6 rounded-full shadow-lg flex items-center justify-center gap-2 transition-all">
+                            <span class="material-symbols-rounded text-xl">stop_circle</span>
+                            録画を停止してトリミング・変換へ進む
+                        </button>
+                    </div>
+
+                    <!-- サンドボックス制限環境向けの案内＆デモ録画・HTML保存パネル（下側1つのみに統一） -->
+                    <div id="sandboxFallbackBanner" class="text-[11px] text-slate-600 bg-amber-50/80 border border-amber-200 rounded-2xl p-3.5 flex flex-col gap-2.5 transition-all duration-300">
+                        <div class="flex items-start gap-2">
+                            <span id="sandboxFallbackIcon" class="material-symbols-rounded text-amber-600 text-base shrink-0 mt-0.5">security</span>
+                            <div>
+                                <span id="sandboxFallbackTitle" class="font-bold text-slate-800">プレビュー枠のブラウザ制限について：</span>
+                                <span id="sandboxFallbackDesc">プレビュー用の埋め込みフレーム内ではブラウザのセキュリティ制限（<code class="bg-white px-1 py-0.5 rounded border">display-capture</code> ポリシー）によりPC画面キャプチャがブロックされる場合があります。</span>
+                            </div>
+                        </div>
+                        <div class="flex flex-wrap items-center gap-2 pl-6">
+                            <button type="button" onclick="downloadStandaloneApp()" class="btn-ripple bg-white hover:bg-accent-light text-accent-dark border border-accent-border font-bold px-3 py-1.5 rounded-full flex items-center gap-1 shadow-sm transition-colors">
+                                <span class="material-symbols-rounded text-sm">download</span>
+                                アプリ(HTML)を保存して制限なしで開く
+                            </button>
+                            <button type="button" onclick="startSimulatedScreenRecording()" class="btn-ripple bg-slate-800 hover:bg-slate-700 text-white font-bold px-3 py-1.5 rounded-full flex items-center gap-1 shadow-sm transition-colors">
+                                <span class="material-symbols-rounded text-sm">play_circle</span>
+                                デモ画面を録画して変換を試す
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 動画プレビュー＆トリミングカード（ファイル読込後または画面録画完了後に表示） -->
+                <div id="previewCard" class="hidden bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-md3-1 flex flex-col gap-5">
+                    <div class="flex items-center justify-between border-b border-slate-100 pb-3 gap-2">
+                        <div class="flex items-center gap-2.5 overflow-hidden">
+                            <span class="material-symbols-rounded text-accent text-2xl shrink-0">movie</span>
+                            <div class="truncate">
+                                <h3 id="fileNameDisplay" class="font-bold text-sm text-slate-800 truncate">video.mp4</h3>
+                                <p id="fileMetaDisplay" class="text-xs text-slate-500">0.0 MB • 00:00</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-1.5 shrink-0">
+                            <button type="button" onclick="switchInputMode('record', true)" class="text-xs font-medium text-accent-dark hover:bg-accent-light bg-accent-light/60 border border-accent-border px-3 py-1.5 rounded-full transition-colors flex items-center gap-1">
+                                <span class="material-symbols-rounded text-base">screen_record</span>
+                                再録画
+                            </button>
+                            <button id="changeFileBtn" class="text-xs font-medium text-slate-600 hover:text-accent bg-slate-100 hover:bg-accent-light px-3 py-1.5 rounded-full transition-colors flex items-center gap-1">
+                                <span class="material-symbols-rounded text-base">swap_horiz</span>
+                                別のファイル
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- ビデオプレイヤー -->
+                    <div class="bg-slate-900 rounded-2xl overflow-hidden aspect-video relative flex items-center justify-center shadow-inner">
+                        <video id="sourceVideo" class="max-h-full max-w-full" controls playsinline></video>
+                    </div>
+
+                    <!-- 変換範囲（複数区間トリミング）指定 -->
+                    <div class="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 flex flex-col gap-3.5">
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <label class="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                                <span class="material-symbols-rounded text-accent text-base">content_cut</span>
+                                変換する区間の指定（複数カット＆結合）
+                            </label>
+                            <div class="flex flex-wrap items-center gap-1.5">
+                                <span id="durationBadge" class="text-xs font-semibold text-accent-dark bg-accent-light px-2.5 py-1 rounded-full border border-accent-border">
+                                    合計: 0.0秒 (1区間)
+                                </span>
+                                <button type="button" onclick="splitSegmentAtCurrentTime()" class="btn-ripple text-xs font-bold text-accent-dark bg-white hover:bg-accent-light border border-accent-border px-2.5 py-1 rounded-full flex items-center gap-1 shadow-sm transition-colors" title="現在の赤いピン位置で区間を2つに分割します">
+                                    <span class="material-symbols-rounded text-sm">content_cut</span>
+                                    現在位置で分割
+                                </button>
+                                <button type="button" onclick="addTrimSegment()" class="btn-ripple text-xs font-bold text-white bg-accent hover:bg-accent-hover px-3 py-1 rounded-full flex items-center gap-1 shadow-sm transition-colors">
+                                    <span class="material-symbols-rounded text-sm">add</span>
+                                    区間を追加
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- タイムライン上の選択区間ビジュアルバー -->
+                        <div class="w-full select-none">
+                            <div class="flex justify-between items-center text-[11px] text-slate-500 mb-1.5 font-medium">
+                                <span id="timelineMinLabel">0:00.0 (0.0s)</span>
+                                <span class="flex items-center gap-1.5 text-slate-700 font-bold bg-white px-2.5 py-0.5 rounded-full border border-slate-200 shadow-sm">
+                                    <span class="w-2 h-2 rounded-full bg-red-500 inline-block"></span>
+                                    現在位置: <span id="timelineCurrentLabel" class="text-accent-dark font-mono">0:00.0 (0.0s)</span>
+                                </span>
+                                <span id="timelineMaxLabel">0:00.0 (0.0s)</span>
+                            </div>
+                            <div id="timelineVisualizer" onpointerdown="onTimelinePointerDown(event)" title="クリックまたはドラッグして再生位置を移動できます" class="w-full h-5 bg-slate-200 rounded-lg relative overflow-hidden shadow-inner cursor-ew-resize ring-1 ring-slate-300/80 hover:ring-2 hover:ring-accent transition-all">
+                                <!-- JSで複数区間バーと現在位置プレイヘッドを描画 -->
+                            </div>
+                        </div>
+
+                        <!-- 複数区間リストコンテナ -->
+                        <div id="segmentsContainer" class="flex flex-col gap-2.5 max-h-64 overflow-y-auto pr-1">
+                            <!-- JSで動的に各区間カードを生成 -->
+                        </div>
+
+                        <p class="text-[11px] text-slate-500 flex items-center gap-1">
+                            <span class="material-symbols-rounded text-sm text-accent">info</span>
+                            上から順番にシーンがつなぎ合わされ、1つのファイルとして出力されます。
+                        </p>
+                    </div>
+                </div>
+
+                <!-- 変換結果プレビューカード -->
+                <div id="resultCard" class="hidden bg-white rounded-3xl border-2 border-accent p-5 sm:p-6 shadow-md3-2 flex flex-col gap-4 relative overflow-hidden">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <span class="material-symbols-rounded text-accent text-2xl">check_circle</span>
+                            <h3 class="font-bold text-base text-slate-800">変換が完了しました！</h3>
+                        </div>
+                        <span id="resultFormatBadge" class="text-xs font-bold uppercase bg-accent text-white px-3 py-1 rounded-full">GIF</span>
+                    </div>
+
+                    <div id="resultPreviewContainer" class="bg-slate-900 rounded-2xl overflow-hidden flex items-center justify-center min-h-[200px] max-h-[400px] p-2">
+                        <!-- 動的に生成された画像・動画・音声がここに入ります -->
+                    </div>
+
+                    <div class="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+                        <div class="text-xs text-slate-500" id="resultSizeInfo">
+                            出力ファイルサイズ: 計算中...
+                        </div>
+                        <a id="downloadBtn" href="#" download="converted_media" class="w-full sm:w-auto btn-ripple bg-accent hover:bg-accent-hover text-white font-bold text-sm px-6 py-3 rounded-full shadow-md3-accent flex items-center justify-center gap-2 transition-all">
+                            <span class="material-symbols-rounded text-xl">download</span>
+                            ファイルを保存する
+                        </a>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- 右カラム：変換フォーマット＆詳細設定 (5 cols) -->
+            <div class="lg:col-span-5 flex flex-col gap-6">
+                
+                <div class="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-md3-1 flex flex-col gap-6">
+                    <div>
+                        <h2 class="text-base font-bold text-slate-800 flex items-center gap-2 mb-1">
+                            <span class="material-symbols-rounded text-accent">tune</span>
+                            出力フォーマット設定
+                        </h2>
+                        <p class="text-xs text-slate-500">用途に合わせて変換したい形式を選択してください</p>
+                    </div>
+
+                    <!-- フォーマット選択チップ（Material Design 3 Selection Cards） -->
+                    <div class="grid grid-cols-1 gap-2.5" id="formatSelector">
+                        
+                        <!-- GIF (Googleスライド推奨) -->
+                        <label class="relative flex items-center p-3.5 rounded-2xl border-2 cursor-pointer transition-all border-accent bg-accent-light/50" data-format="gif">
+                            <input type="radio" name="outputFormat" value="gif" class="sr-only" checked>
+                            <div class="w-10 h-10 rounded-xl bg-accent text-white flex items-center justify-center mr-3.5 shrink-0">
+                                <span class="material-symbols-rounded">gif_box</span>
+                            </div>
+                            <div class="flex-1">
+                                <div class="flex items-center gap-2">
+                                    <span class="font-bold text-sm text-slate-900">GIF アニメーション</span>
+                                    <span class="text-[10px] font-bold bg-accent text-white px-2 py-0.5 rounded-full">スライド自動ループに最適</span>
+                                </div>
+                                <p class="text-xs text-slate-500 mt-0.5">Googleスライドに貼るだけで無限ループ再生されます</p>
+                            </div>
+                            <span class="material-symbols-rounded text-accent text-xl check-icon">radio_button_checked</span>
+                        </label>
+
+                        <!-- MP4 -->
+                        <label class="relative flex items-center p-3.5 rounded-2xl border-2 border-slate-200 hover:border-slate-300 cursor-pointer transition-all" data-format="mp4">
+                            <input type="radio" name="outputFormat" value="mp4" class="sr-only">
+                            <div class="w-10 h-10 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center mr-3.5 shrink-0 icon-box">
+                                <span class="material-symbols-rounded">smart_display</span>
+                            </div>
+                            <div class="flex-1">
+                                <div class="flex items-center gap-2">
+                                    <span class="font-bold text-sm text-slate-900">MP4 動画 (.mp4)</span>
+                                </div>
+                                <p class="text-xs text-slate-500 mt-0.5">最も汎用性の高い標準的な動画フォーマット</p>
+                            </div>
+                            <span class="material-symbols-rounded text-slate-300 text-xl check-icon">radio_button_unchecked</span>
+                        </label>
+
+                        <!-- WebM / MKV -->
+                        <label class="relative flex items-center p-3.5 rounded-2xl border-2 border-slate-200 hover:border-slate-300 cursor-pointer transition-all" data-format="webm">
+                            <input type="radio" name="outputFormat" value="webm" class="sr-only">
+                            <div class="w-10 h-10 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center mr-3.5 shrink-0 icon-box">
+                                <span class="material-symbols-rounded">video_settings</span>
+                            </div>
+                            <div class="flex-1">
+                                <div class="flex items-center gap-2">
+                                    <span class="font-bold text-sm text-slate-900">WebM / MKV 互換 (.webm / .mkv)</span>
+                                </div>
+                                <p class="text-xs text-slate-500 mt-0.5">高圧縮・Web親和性の高いオープン動画形式</p>
+                            </div>
+                            <span class="material-symbols-rounded text-slate-300 text-xl check-icon">radio_button_unchecked</span>
+                        </label>
+
+                        <!-- Audio (WAV / M4A抽出) -->
+                        <label class="relative flex items-center p-3.5 rounded-2xl border-2 border-slate-200 hover:border-slate-300 cursor-pointer transition-all" data-format="audio">
+                            <input type="radio" name="outputFormat" value="audio" class="sr-only">
+                            <div class="w-10 h-10 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center mr-3.5 shrink-0 icon-box">
+                                <span class="material-symbols-rounded">audio_file</span>
+                            </div>
+                            <div class="flex-1">
+                                <div class="flex items-center gap-2">
+                                    <span class="font-bold text-sm text-slate-900">音声のみ抽出 (.m4a / .wav)</span>
+                                </div>
+                                <p class="text-xs text-slate-500 mt-0.5">動画からオーディオトラックのみを高速抽出します</p>
+                            </div>
+                            <span class="material-symbols-rounded text-slate-300 text-xl check-icon">radio_button_unchecked</span>
+                        </label>
+                    </div>
+
+                    <hr class="border-slate-100">
+
+                    <!-- GIF専用設定パネル -->
+                    <div id="gifSettingsPanel" class="flex flex-col gap-4">
+                        <h3 class="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                            <span class="material-symbols-rounded text-accent text-base">settings_motion_mode</span>
+                            GIF アニメーション詳細設定
+                        </h3>
+
+                        <!-- 解像度（横幅） -->
+                        <div>
+                            <div class="flex justify-between text-xs mb-1.5">
+                                <span class="font-medium text-slate-700">出力サイズ（横幅）</span>
+                                <span id="gifWidthLabel" class="font-bold text-accent-dark">640 px (スライド貼付に推奨・バランス)</span>
+                            </div>
+                            <select id="gifWidthSelect" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2.5 text-sm font-medium focus:outline-none focus:border-accent">
+                                <option value="320">320 px (軽量・小サイズ)</option>
+                                <option value="480">480 px (コンパクト)</option>
+                                <option value="640" selected>640 px (スライド貼付に推奨・バランス)</option>
+                                <option value="800">800 px (高画質・やや重め)</option>
+                                <option value="960">960 px (高精細・中尺向け)</option>
+                                <option value="1280">1280 px (HD高精細・細かい文字向け)</option>
+                                <option value="1920">1920 px (Full HD・最高画質)</option>
+                                <option value="original">元動画と同じサイズ (オリジナル等倍)</option>
+                            </select>
+                        </div>
+
+                        <!-- フレームレート (FPS) -->
+                        <div>
+                            <div class="flex justify-between text-xs mb-1.5">
+                                <span class="font-medium text-slate-700">なめらかさ (フレームレート)</span>
+                                <span id="gifFpsLabel" class="font-bold text-accent-dark">10 FPS</span>
+                            </div>
+                            <input type="range" id="gifFpsInput" min="5" max="50" step="5" value="10" class="w-full h-2 bg-slate-200 rounded-lg cursor-pointer">
+                            <div class="flex justify-between text-[10px] text-slate-400 mt-1">
+                                <span>5 FPS (軽量)</span>
+                                <span>15 FPS (滑らか)</span>
+                                <span>30 FPS (高FPS)</span>
+                                <span>50 FPS (GIF規格上限)</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 動画・音声用の設定パネル -->
+                    <div id="videoSettingsPanel" class="hidden flex flex-col gap-4">
+                        <h3 class="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                            <span class="material-symbols-rounded text-accent text-base">tune</span>
+                            エンコード・コンテナ詳細設定
+                        </h3>
+
+                        <div id="subFormatContainer" class="hidden">
+                            <label class="block text-xs font-medium text-slate-700 mb-1.5">出力ファイルの拡張子</label>
+                            <select id="subFormatSelect" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2.5 text-sm font-medium focus:outline-none focus:border-accent">
+                                <!-- JSで動的に切り替え -->
+                            </select>
+                        </div>
+
+                        <div>
+                            <div class="flex justify-between text-xs mb-1.5">
+                                <span class="font-medium text-slate-700">ビットレート品質</span>
+                                <span id="bitrateLabel" class="font-bold text-accent-dark">標準品質 (2.5 Mbps)</span>
+                            </div>
+                            <select id="bitrateSelect" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2.5 text-sm font-medium focus:outline-none focus:border-accent">
+                                <option value="1000000">軽量・低容量 (1.0 Mbps)</option>
+                                <option value="2500000" selected>標準品質 (2.5 Mbps)</option>
+                                <option value="5000000">高品質 (5.0 Mbps)</option>
+                                <option value="8000000">最高品質 (8.0 Mbps)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- 進捗プログレスバー -->
+                    <div id="progressContainer" class="hidden bg-accent-light/60 border border-accent-border rounded-2xl p-4 flex flex-col gap-2">
+                        <div class="flex items-center justify-between text-xs font-bold text-accent-dark">
+                            <span id="progressStatusText" class="flex items-center gap-1.5">
+                                <span class="material-symbols-rounded text-base animate-spin">progress_activity</span>
+                                変換処理中...
+                            </span>
+                            <span id="progressPercentText">0%</span>
+                        </div>
+                        <div class="w-full bg-white rounded-full h-2.5 overflow-hidden p-0.5 border border-accent-border/60">
+                            <div id="progressBar" class="bg-accent h-full rounded-full transition-all duration-150" style="width: 0%"></div>
+                        </div>
+                        <p id="progressSubText" class="text-[11px] text-slate-500">ブラウザ内でフレームを処理しています。タブを閉じずにお待ちください。</p>
+                    </div>
+
+                    <!-- 変換実行ボタン (Material 3 FAB風ピルボタン) -->
+                    <button id="convertBtn" disabled class="w-full btn-ripple bg-accent hover:bg-accent-hover disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none text-white font-bold text-sm py-4 px-6 rounded-full shadow-md3-accent flex items-center justify-center gap-2 transition-all cursor-pointer disabled:cursor-not-allowed">
+                        <span class="material-symbols-rounded text-xl">autorenew</span>
+                        <span id="convertBtnText">動画ファイルを選択してください</span>
+                    </button>
+
+                </div>
+
+                <!-- 使い方・Googleスライド連携ガイドカード -->
+                <div class="bg-white rounded-3xl border border-slate-200 p-5 shadow-md3-1">
+                    <h3 class="text-xs font-bold text-slate-800 flex items-center gap-1.5 mb-2.5">
+                        <span class="material-symbols-rounded text-accent text-lg">lightbulb</span>
+                        Googleスライドで自動ループさせるコツ
+                    </h3>
+                    <ol class="text-xs text-slate-600 space-y-2 list-decimal list-inside leading-relaxed">
+                        <li>出力フォーマットで <strong class="text-slate-800">「GIF アニメーション」</strong> を選んで変換・保存します。</li>
+                        <li>Googleスライドを開き、上部メニューの <strong class="text-slate-800">「挿入」＞「画像」＞「パソコンからアップロード」</strong> を選択します。</li>
+                        <li>保存したGIFファイルを配置すると、設定なしで<strong class="text-accent-dark underline">スライド表示と同時に無限ループ再生</strong>されます！</li>
+                    </ol>
+                </div>
+
+            </div>
+        </div>
+    </main>
+
+    <!-- オフスクリーン描画用キャンバス（非表示） -->
+    <canvas id="renderCanvas" class="hidden"></canvas>
+
+    <!-- アプリケーションロジック -->
+    <script>
+        // --- 状態管理 ---
+        let currentFile = null;
+        let currentFormat = 'gif';
+        let isConverting = false;
+        let videoDuration = 0;
+        let generatedBlobUrl = null;
+        let trimSegments = [{ start: 0, end: 10 }];
+        let currentInputMode = 'file'; // 'file' or 'record'
+
+        // 画面録画用の状態
+        let screenStream = null;
+        let micStream = null;
+        let recordingAudioCtx = null;
+        let screenRecorder = null;
+        let recordedScreenChunks = [];
+        let recordingStartTime = 0;
+        let recordingTimerInterval = null;
+        let isRecordingActive = false;
+
+        // --- DOM要素の取得 ---
+        const dropzone = document.getElementById('dropzone');
+        const recordStudioCard = document.getElementById('recordStudioCard');
+        const tabFileBtn = document.getElementById('tabFileBtn');
+        const tabRecordBtn = document.getElementById('tabRecordBtn');
+        const liveRecordPreviewWrapper = document.getElementById('liveRecordPreviewWrapper');
+        const liveRecordVideo = document.getElementById('liveRecordVideo');
+        const recordOptionsPanel = document.getElementById('recordOptionsPanel');
+        const startRecordBtn = document.getElementById('startRecordBtn');
+        const stopRecordBtn = document.getElementById('stopRecordBtn');
+        const recordingTimerBadge = document.getElementById('recordingTimerBadge');
+        const recordingTimerText = document.getElementById('recordingTimerText');
+
+        const fileInput = document.getElementById('fileInput');
+        const previewCard = document.getElementById('previewCard');
+        const sourceVideo = document.getElementById('sourceVideo');
+        const fileNameDisplay = document.getElementById('fileNameDisplay');
+        const fileMetaDisplay = document.getElementById('fileMetaDisplay');
+        const changeFileBtn = document.getElementById('changeFileBtn');
+        const durationBadge = document.getElementById('durationBadge');
+        const segmentsContainer = document.getElementById('segmentsContainer');
+        const timelineVisualizer = document.getElementById('timelineVisualizer');
+        const timelineMaxLabel = document.getElementById('timelineMaxLabel');
+        
+        const formatLabels = document.querySelectorAll('#formatSelector label');
+        const gifSettingsPanel = document.getElementById('gifSettingsPanel');
+        const videoSettingsPanel = document.getElementById('videoSettingsPanel');
+        const subFormatContainer = document.getElementById('subFormatContainer');
+        const subFormatSelect = document.getElementById('subFormatSelect');
+        
+        const gifWidthSelect = document.getElementById('gifWidthSelect');
+        const gifWidthLabel = document.getElementById('gifWidthLabel');
+        const gifFpsInput = document.getElementById('gifFpsInput');
+        const gifFpsLabel = document.getElementById('gifFpsLabel');
+        const bitrateSelect = document.getElementById('bitrateSelect');
+        const bitrateLabel = document.getElementById('bitrateLabel');
+
+        const convertBtn = document.getElementById('convertBtn');
+        const convertBtnText = document.getElementById('convertBtnText');
+        const progressContainer = document.getElementById('progressContainer');
+        const progressBar = document.getElementById('progressBar');
+        const progressPercentText = document.getElementById('progressPercentText');
+        const progressStatusText = document.getElementById('progressStatusText');
+
+        const resultCard = document.getElementById('resultCard');
+        const resultPreviewContainer = document.getElementById('resultPreviewContainer');
+        const resultFormatBadge = document.getElementById('resultFormatBadge');
+        const resultSizeInfo = document.getElementById('resultSizeInfo');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const renderCanvas = document.getElementById('renderCanvas');
+
+        // --- 通知メッセージ表示（alertの代替） ---
+        function showNotification(title, message, type = 'info') {
+            const box = document.getElementById('notificationBox');
+            const icon = document.getElementById('notificationIcon');
+            const titleEl = document.getElementById('notificationTitle');
+            const msgEl = document.getElementById('notificationMessage');
+
+            box.className = 'mb-6 p-4 rounded-2xl border flex items-start gap-3 transition-all duration-300 ';
+            if (type === 'error') {
+                box.classList.add('bg-red-50', 'border-red-200', 'text-red-900');
+                icon.textContent = 'error';
+                icon.className = 'material-symbols-rounded text-xl mt-0.5 text-red-600';
+            } else if (type === 'success') {
+                box.classList.add('bg-accent-light', 'border-accent-border', 'text-accent-dark');
+                icon.textContent = 'check_circle';
+                icon.className = 'material-symbols-rounded text-xl mt-0.5 text-accent';
+            } else {
+                box.classList.add('bg-slate-100', 'border-slate-300', 'text-slate-800');
+                icon.textContent = 'info';
+                icon.className = 'material-symbols-rounded text-xl mt-0.5 text-slate-600';
+            }
+
+            titleEl.textContent = title;
+            msgEl.textContent = message;
+            box.classList.remove('hidden');
+        }
+
+        function hideNotification() {
+            document.getElementById('notificationBox').classList.add('hidden');
+        }
+
+        function showRecordInlineAlert(title, message) {
+            const banner = document.getElementById('sandboxFallbackBanner');
+            const titleEl = document.getElementById('sandboxFallbackTitle');
+            const descEl = document.getElementById('sandboxFallbackDesc');
+            const iconEl = document.getElementById('sandboxFallbackIcon');
+            if (!banner) return;
+            if (titleEl) titleEl.textContent = title + '：';
+            if (descEl) descEl.textContent = message;
+            if (iconEl) iconEl.textContent = 'warning';
+            banner.classList.remove('border-amber-200', 'bg-amber-50/80');
+            banner.classList.add('border-amber-400', 'bg-amber-50', 'ring-2', 'ring-amber-200');
+        }
+
+        function hideRecordInlineAlert() {
+            const banner = document.getElementById('sandboxFallbackBanner');
+            const titleEl = document.getElementById('sandboxFallbackTitle');
+            const descEl = document.getElementById('sandboxFallbackDesc');
+            const iconEl = document.getElementById('sandboxFallbackIcon');
+            if (!banner) return;
+            if (titleEl) titleEl.textContent = 'プレビュー枠のブラウザ制限について：';
+            if (descEl) descEl.innerHTML = 'プレビュー用の埋め込みフレーム内ではブラウザのセキュリティ制限（<code class="bg-white px-1 py-0.5 rounded border">display-capture</code> ポリシー）によりPC画面キャプチャがブロックされる場合があります。';
+            if (iconEl) iconEl.textContent = 'security';
+            banner.classList.remove('border-amber-400', 'bg-amber-50', 'ring-2', 'ring-amber-200');
+            banner.classList.add('border-amber-200', 'bg-amber-50/80');
+        }
+
+        // --- ローカルHTMLとして保存して開く処理 ---
+        function downloadStandaloneApp() {
+            hideNotification();
+            hideRecordInlineAlert();
+
+            // 現在のDOMをクローンし、プレビュー環境固有の blob: URL や一時状態を完全にクリーンアップしてから保存する
+            const clonedRoot = document.documentElement.cloneNode(true);
+
+            // 0. Tailwind CDNが実行時に動的注入した巨大な<style>タグを除去（開いた先で再生成させる）
+            const customStyleText = '.btn-ripple';
+            clonedRoot.querySelectorAll('head style').forEach(styleEl => {
+                if (!styleEl.textContent.includes(customStyleText)) {
+                    styleEl.remove();
+                }
+            });
+
+            // 1. video / audio / img 等の src 属性に残っている blob: URL を除去
+            clonedRoot.querySelectorAll('video, audio, img, source').forEach(el => {
+                el.removeAttribute('src');
+            });
+
+            // 2. ダウンロードボタン等の href 属性に残っている blob: URL を初期化
+            const clonedDownloadBtn = clonedRoot.querySelector('#downloadBtn');
+            if (clonedDownloadBtn) {
+                clonedDownloadBtn.setAttribute('href', '#');
+            }
+
+            // 3. 初期表示状態をクリーンな状態に整える
+            const clonedPreviewCard = clonedRoot.querySelector('#previewCard');
+            if (clonedPreviewCard) clonedPreviewCard.classList.add('hidden');
+            const clonedResultCard = clonedRoot.querySelector('#resultCard');
+            if (clonedResultCard) clonedResultCard.classList.add('hidden');
+            const clonedResultContainer = clonedRoot.querySelector('#resultPreviewContainer');
+            if (clonedResultContainer) clonedResultContainer.innerHTML = '';
+            const clonedLiveWrapper = clonedRoot.querySelector('#liveRecordPreviewWrapper');
+            if (clonedLiveWrapper) clonedLiveWrapper.classList.add('hidden');
+            const clonedRecordOptions = clonedRoot.querySelector('#recordOptionsPanel');
+            if (clonedRecordOptions) clonedRecordOptions.classList.remove('hidden');
+            const clonedStartBtn = clonedRoot.querySelector('#startRecordBtn');
+            if (clonedStartBtn) clonedStartBtn.classList.remove('hidden');
+            const clonedStopBtn = clonedRoot.querySelector('#stopRecordBtn');
+            if (clonedStopBtn) clonedStopBtn.classList.add('hidden');
+            const clonedTimerBadge = clonedRoot.querySelector('#recordingTimerBadge');
+            if (clonedTimerBadge) {
+                clonedTimerBadge.classList.add('hidden');
+                clonedTimerBadge.classList.remove('inline-flex');
+            }
+
+            const htmlContent = '<!DOCTYPE html>\n' + clonedRoot.outerHTML;
+            const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'media_convert_studio.html';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setTimeout(() => URL.revokeObjectURL(url), 3000);
+
+            showNotification(
+                'スタンドアロン版HTML（media_convert_studio.html）を保存しました',
+                'ダウンロードしたHTMLファイルをダブルクリックしてブラウザで直接開くと、セキュリティ制限やBlobエラーなしでPC画面の録画と変換が利用できます。',
+                'success'
+            );
+        }
+
+        // --- 入力モード切替 (ファイル選択 / 画面録画) ---
+        function switchInputMode(mode, forceShowInput = false) {
+            if (isConverting) return;
+            currentInputMode = mode;
+
+            const isFile = mode === 'file';
+            tabFileBtn.className = isFile
+                ? 'btn-ripple py-2.5 px-4 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all bg-accent text-white shadow-sm'
+                : 'btn-ripple py-2.5 px-4 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all text-slate-600 hover:bg-slate-100';
+
+            tabRecordBtn.className = !isFile
+                ? 'btn-ripple py-2.5 px-4 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all bg-accent text-white shadow-sm'
+                : 'btn-ripple py-2.5 px-4 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all text-slate-600 hover:bg-slate-100';
+
+            if (forceShowInput || !currentFile) {
+                previewCard.classList.add('hidden');
+                if (isFile) {
+                    dropzone.classList.remove('hidden');
+                    recordStudioCard.classList.add('hidden');
+                } else {
+                    dropzone.classList.add('hidden');
+                    recordStudioCard.classList.remove('hidden');
+                }
+            } else {
+                if (!isFile) {
+                    recordStudioCard.classList.remove('hidden');
+                } else {
+                    recordStudioCard.classList.add('hidden');
+                }
+            }
+        }
+
+        // --- 画面録画機能 (Screen Capture API) ---
+        let demoCanvasInterval = null;
+
+        // マイクチェックボックスをONにした時点で（タブにフォーカスがある状態で）事前にマイク権限を取得しておく
+        async function onMicCheckboxChange(checkboxEl) {
+            if (!checkboxEl.checked) return;
+            if (!navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== 'function') return;
+            try {
+                const testStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                testStream.getTracks().forEach(t => t.stop());
+            } catch (err) {
+                console.warn('マイク権限の事前確認に失敗しました:', err);
+                checkboxEl.checked = false;
+                showNotification(
+                    'マイク権限が許可されませんでした',
+                    'マイク音声を含める場合はブラウザのマイク権限を許可してください（画面録画自体はマイクなしでそのまま行えます）。',
+                    'info'
+                );
+            }
+        }
+
+        // 録画開始時にUIを即座にプレビュー＆停止ボタン表示へ切り替えるヘルパー
+        function enterRecordingUIState(previewStream) {
+            isRecordingActive = true;
+            liveRecordVideo.srcObject = previewStream;
+            liveRecordVideo.muted = true;
+            liveRecordVideo.play().catch(() => {});
+
+            liveRecordPreviewWrapper.classList.remove('hidden');
+            recordOptionsPanel.classList.add('hidden');
+            startRecordBtn.classList.add('hidden');
+            stopRecordBtn.classList.remove('hidden');
+            recordingTimerBadge.classList.remove('hidden');
+            recordingTimerBadge.classList.add('inline-flex');
+
+            recordingStartTime = performance.now();
+            if (recordingTimerInterval) clearInterval(recordingTimerInterval);
+            recordingTimerInterval = setInterval(() => {
+                const elapsedSec = (performance.now() - recordingStartTime) / 1000;
+                const m = Math.floor(elapsedSec / 60).toString().padStart(2, '0');
+                const s = Math.floor(elapsedSec % 60).toString().padStart(2, '0');
+                const ms = Math.floor((elapsedSec % 1) * 10);
+                recordingTimerText.textContent = `${m}:${s}.${ms}`;
+            }, 100);
+        }
+
+        async function startScreenRecording() {
+            hideNotification();
+            hideRecordInlineAlert();
+
+            if (!navigator.mediaDevices || typeof navigator.mediaDevices.getDisplayMedia !== 'function') {
+                showRecordInlineAlert(
+                    '画面キャプチャAPIが利用できません',
+                    'お使いの環境では getDisplayMedia がサポートされていないか制限されています。「アプリ(HTML)を保存して制限なしで開く」からお試しください。'
+                );
+                return;
+            }
+
+            const wantSysAudio = document.getElementById('recordSystemAudio').checked;
+            const wantMicAudio = document.getElementById('recordMicAudio').checked;
+            const callStartTime = performance.now();
+
+            try {
+                // 1. ユーザーのクリックジェスチャー直後に直接 getDisplayMedia を呼び出す
+                screenStream = await navigator.mediaDevices.getDisplayMedia({
+                    video: true,
+                    audio: wantSysAudio
+                });
+
+                // 2. 画面共有が開始された瞬間に、他のawaitを一切挟まずUIを「ライブプレビュー＆停止ボタン」へ即時切り替える！
+                enterRecordingUIState(screenStream);
+
+                const statusTextEl = document.getElementById('liveRecordStatusText');
+                if (statusTextEl) {
+                    statusTextEl.textContent = '画面キャプチャ中... 下の赤ボタン、またはブラウザ上部の「共有を停止」で完了します';
+                }
+
+                // 3. マイク音声が必要な場合は、背面タブでハングしないよう1.2秒のタイムアウト付きで取得する
+                if (wantMicAudio) {
+                    try {
+                        const micPromise = navigator.mediaDevices.getUserMedia({ audio: true });
+                        const timeoutPromise = new Promise((_, reject) =>
+                            setTimeout(() => reject(new Error('MicTimeout')), 1200)
+                        );
+                        micStream = await Promise.race([micPromise, timeoutPromise]);
+                    } catch (micErr) {
+                        console.warn('マイク音声の取得をスキップして画面録画を続行します:', micErr);
+                        micStream = null;
+                    }
+                }
+
+                // 4. 映像トラックと音声トラックを安全に合成
+                const videoTracks = screenStream.getVideoTracks();
+                const sysAudioTracks = screenStream.getAudioTracks();
+                const micAudioTracks = micStream ? micStream.getAudioTracks() : [];
+
+                let finalAudioTracks = [];
+                if (sysAudioTracks.length > 0 && micAudioTracks.length > 0) {
+                    try {
+                        recordingAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                        if (recordingAudioCtx.state === 'suspended') {
+                            recordingAudioCtx.resume().catch(() => {});
+                        }
+                        const dest = recordingAudioCtx.createMediaStreamDestination();
+                        const sysSource = recordingAudioCtx.createMediaStreamSource(new MediaStream(sysAudioTracks));
+                        const micSource = recordingAudioCtx.createMediaStreamSource(new MediaStream(micAudioTracks));
+                        sysSource.connect(dest);
+                        micSource.connect(dest);
+                        finalAudioTracks = dest.stream.getAudioTracks();
+                    } catch (mixErr) {
+                        finalAudioTracks = [sysAudioTracks[0]];
+                    }
+                } else if (sysAudioTracks.length > 0) {
+                    finalAudioTracks = [sysAudioTracks[0]];
+                } else if (micAudioTracks.length > 0) {
+                    finalAudioTracks = [micAudioTracks[0]];
+                }
+
+                const combinedStream = new MediaStream([...videoTracks, ...finalAudioTracks]);
+                beginStreamRecording(combinedStream, screenStream);
+
+            } catch (err) {
+                console.warn('getDisplayMedia error:', err);
+                const elapsedMs = performance.now() - callStartTime;
+                const errMsg = (err && err.message) ? err.message.toLowerCase() : '';
+                const isIframeBlocked =
+                    (window.self !== window.top) &&
+                    (errMsg.includes('permissions policy') ||
+                     errMsg.includes('display-capture') ||
+                     (err && err.name === 'SecurityError') ||
+                     (err && err.name === 'NotAllowedError' && elapsedMs < 300));
+
+                cleanupScreenRecordingUI();
+
+                if (isIframeBlocked) {
+                    showRecordInlineAlert(
+                        'プレビュー枠（iframe）の制限により画面録画がブロックされました',
+                        'この埋め込みプレビュー内ではOSの画面選択ダイアログがブロックされます。下の「アプリ(HTML)を保存して制限なしで開く」から新しくファイルを保存してブラウザで開いてください。'
+                    );
+                    return;
+                }
+
+                showRecordInlineAlert(
+                    '画面録画を開始できませんでした',
+                    `画面選択がキャンセルされたか、ブラウザの権限が拒否されました（詳細: ${err && err.name ? err.name : 'キャンセル'}）。もう一度ボタンを押して画面を選択してください。`
+                );
+            }
+        }
+
+        // プレビュー枠（サンドボックス内）でも画面録画〜トリミング〜GIF/MP4エクスポートを一気通貫で試せるデモ録画モード（明示的にボタンを押した時のみ起動）
+        function startSimulatedScreenRecording() {
+            hideNotification();
+            hideRecordInlineAlert();
+
+            const statusTextEl = document.getElementById('liveRecordStatusText');
+            if (statusTextEl) {
+                statusTextEl.textContent = 'デモ画面キャプチャ中... 下の赤ボタンで停止してトリミングへ進みます';
+            }
+
+            const simCanvas = document.createElement('canvas');
+            simCanvas.width = 640;
+            simCanvas.height = 360;
+            const ctx = simCanvas.getContext('2d');
+            const startT = performance.now();
+
+            const drawSimFrame = () => {
+                const elapsed = (performance.now() - startT) / 1000;
+                // 背景グラデーション
+                const grad = ctx.createLinearGradient(0, 0, 640, 360);
+                grad.addColorStop(0, '#f8fafc');
+                grad.addColorStop(1, '#e8f8f5');
+                ctx.fillStyle = grad;
+                ctx.fillRect(0, 0, 640, 360);
+
+                // ダッシュボード風のアニメーションUI描画
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(30, 30, 580, 300);
+                ctx.strokeStyle = '#a3e4d7';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(30, 30, 580, 300);
+
+                // ヘッダーバー
+                ctx.fillStyle = '#1abc9c';
+                ctx.fillRect(30, 30, 580, 46);
+                ctx.fillStyle = '#ffffff';
+                ctx.font = 'bold 16px sans-serif';
+                ctx.fillText('Screen Recording Demo Preview', 48, 59);
+
+                // 動くチャートバー
+                for (let i = 0; i < 6; i++) {
+                    const barH = 60 + Math.sin(elapsed * 3 + i) * 45;
+                    ctx.fillStyle = i % 2 === 0 ? '#1abc9c' : '#16a085';
+                    ctx.fillRect(70 + i * 85, 270 - barH, 50, barH);
+                }
+
+                // 経過秒数バッジ
+                ctx.fillStyle = '#0f172a';
+                ctx.font = 'bold 22px monospace';
+                ctx.fillText(`REC: ${elapsed.toFixed(1)}s`, 460, 120);
+
+                // マウスカーソル風アニメーション
+                const cursorX = 320 + Math.cos(elapsed * 2.2) * 180;
+                const cursorY = 190 + Math.sin(elapsed * 3.1) * 70;
+                ctx.beginPath();
+                ctx.arc(cursorX, cursorY, 8, 0, Math.PI * 2);
+                ctx.fillStyle = '#0f172a';
+                ctx.fill();
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = '#ffffff';
+                ctx.stroke();
+            };
+
+            drawSimFrame();
+            demoCanvasInterval = setInterval(drawSimFrame, 1000 / 30);
+
+            const stream = simCanvas.captureStream(30);
+            screenStream = stream;
+            beginStreamRecording(stream, stream);
+        }
+
+        function beginStreamRecording(finalStream, previewStream) {
+            // まだUIが切り替わっていない場合（デモ録画など）は即座に切り替える
+            if (!isRecordingActive) {
+                enterRecordingUIState(previewStream);
+            }
+
+            recordedScreenChunks = [];
+            const hasAudio = finalStream.getAudioTracks().length > 0;
+
+            // 音声トラックの有無に応じた安全なMIMEタイプ候補
+            const mimeCandidates = hasAudio
+                ? [
+                    'video/webm;codecs=vp8,opus',
+                    'video/webm;codecs=vp9,opus',
+                    'video/webm',
+                    'video/mp4'
+                ]
+                : [
+                    'video/webm;codecs=vp9',
+                    'video/webm;codecs=vp8',
+                    'video/webm',
+                    'video/mp4'
+                ];
+
+            let selectedMime = '';
+            for (const m of mimeCandidates) {
+                if (window.MediaRecorder && MediaRecorder.isTypeSupported(m)) {
+                    selectedMime = m;
+                    break;
+                }
+            }
+
+            const attachRecorderHandlers = (rec) => {
+                rec.ondataavailable = (e) => {
+                    if (e.data && e.data.size > 0) {
+                        recordedScreenChunks.push(e.data);
+                    }
+                };
+
+                rec.onstop = () => {
+                    const recordedElapsedMs = Math.max(500, performance.now() - recordingStartTime);
+                    const recordedElapsed = recordedElapsedMs / 1000;
+                    const actualMime = (rec && rec.mimeType) || selectedMime || 'video/webm';
+                    cleanupScreenRecordingUI();
+
+                    if (recordedScreenChunks.length === 0) {
+                        showNotification('録画データが空でした', '録画時間が短すぎたか、映像データが取得できませんでした。もう一度お試しください。', 'error');
+                        return;
+                    }
+
+                    const ext = actualMime.includes('mp4') ? 'mp4' : 'webm';
+                    const rawBlob = new Blob(recordedScreenChunks, { type: actualMime });
+
+                    // WebMファイルにDurationヘッダーを注入してメインプレイヤーのシークバーと尺を100%一致させる
+                    patchWebmDurationIfPossible(rawBlob, recordedElapsedMs).then((fixedBlob) => {
+                        const timestamp = new Date().toTimeString().slice(0, 8).replace(/:/g, '');
+                        const file = new File([fixedBlob], `screen_record_${timestamp}.${ext}`, { type: actualMime });
+
+                        recordStudioCard.classList.add('hidden');
+                        handleFileSelect(file, recordedElapsed);
+                        showNotification(
+                            '画面録画が完了しました！',
+                            'そのまま下で不要な区間をトリミングし、右側のパネルからGIFやMP4などの形式でエクスポートできます。',
+                            'success'
+                        );
+                    });
+                };
+            };
+
+            // ブラウザ上部の「共有を停止」ボタンが押された際にも確実に録画完了処理へ進める
+            previewStream.getVideoTracks().forEach(track => {
+                track.onended = () => {
+                    stopScreenRecording();
+                };
+            });
+
+            // MediaRecorderの生成と開始（音声トラック競合時は映像のみストリームへ自動フォールバック）
+            try {
+                screenRecorder = new MediaRecorder(
+                    finalStream,
+                    selectedMime ? { mimeType: selectedMime, videoBitsPerSecond: 4000000 } : {}
+                );
+                attachRecorderHandlers(screenRecorder);
+                screenRecorder.start(200);
+            } catch (startErr) {
+                console.warn('標準設定でのMediaRecorder開始に失敗したため、映像優先モードで再試行します:', startErr);
+                try {
+                    const videoOnlyStream = new MediaStream(previewStream.getVideoTracks());
+                    screenRecorder = new MediaRecorder(videoOnlyStream);
+                    attachRecorderHandlers(screenRecorder);
+                    screenRecorder.start(200);
+                } catch (fallbackErr) {
+                    cleanupScreenRecordingUI();
+                    showNotification('録画エンコーダーの起動エラー', fallbackErr.message || 'MediaRecorderを開始できませんでした。', 'error');
+                }
+            }
+        }
+
+        function stopScreenRecording() {
+            if (screenRecorder && screenRecorder.state !== 'inactive') {
+                try {
+                    if (screenRecorder.state === 'recording') {
+                        screenRecorder.requestData();
+                    }
+                    screenRecorder.stop();
+                } catch (e) {
+                    cleanupScreenRecordingUI();
+                }
+            } else {
+                cleanupScreenRecordingUI();
+            }
+        }
+
+        function cleanupScreenRecordingUI() {
+            isRecordingActive = false;
+            if (demoCanvasInterval) {
+                clearInterval(demoCanvasInterval);
+                demoCanvasInterval = null;
+            }
+            if (recordingTimerInterval) {
+                clearInterval(recordingTimerInterval);
+                recordingTimerInterval = null;
+            }
+            if (screenStream) {
+                screenStream.getTracks().forEach(t => t.stop());
+                screenStream = null;
+            }
+            if (micStream) {
+                micStream.getTracks().forEach(t => t.stop());
+                micStream = null;
+            }
+            if (recordingAudioCtx) {
+                recordingAudioCtx.close().catch(() => {});
+                recordingAudioCtx = null;
+            }
+            liveRecordVideo.srcObject = null;
+            liveRecordPreviewWrapper.classList.add('hidden');
+            recordOptionsPanel.classList.remove('hidden');
+            startRecordBtn.classList.remove('hidden');
+            stopRecordBtn.classList.add('hidden');
+            recordingTimerBadge.classList.add('hidden');
+            recordingTimerBadge.classList.remove('inline-flex');
+        }
+
+        // --- ファイル選択・ドラッグ＆ドロップ処理 ---
+        dropzone.addEventListener('click', () => fileInput.click());
+        changeFileBtn.addEventListener('click', () => fileInput.click());
+
+        dropzone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropzone.classList.add('border-accent', 'bg-accent-light/30');
+        });
+
+        dropzone.addEventListener('dragleave', () => {
+            dropzone.classList.remove('border-accent', 'bg-accent-light/30');
+        });
+
+        dropzone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropzone.classList.remove('border-accent', 'bg-accent-light/30');
+            if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                handleFileSelect(e.dataTransfer.files[0]);
+            }
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files && e.target.files.length > 0) {
+                handleFileSelect(e.target.files[0]);
+            }
+        });
+
+        // MediaRecorderが生成したWebMバイナリにDuration(総ミリ秒)要素を書き込み、ブラウザのvideoシークバーが壊れるのを防ぐ関数
+        async function patchWebmDurationIfPossible(blob, durationMs) {
+            try {
+                if (!blob.type.includes('webm') && !blob.name?.endsWith('.webm')) return blob;
+                const buf = await blob.arrayBuffer();
+                const bytes = new Uint8Array(buf);
+                // WebM Info Segment ID: 0x15 0x49 0xA9 0x66, TimecodeScale: 0x2A 0xD7 0xB1 (通常 1,000,000ns = 1ms)
+                // Duration Element ID: 0x44 0x89, Size: 0x88 (8バイト float64)
+                // もし既にDuration (0x44 0x89 0x88 または 0x44 0x89 0x84) が存在する場合はその値を上書きする
+                const searchLimit = Math.min(bytes.length - 16, 4096);
+                for (let i = 0; i < searchLimit; i++) {
+                    if (bytes[i] === 0x44 && bytes[i + 1] === 0x89) {
+                        if (bytes[i + 2] === 0x88) {
+                            const view = new DataView(buf, i + 3, 8);
+                            view.setFloat64(0, durationMs, false);
+                            return new Blob([buf], { type: blob.type });
+                        } else if (bytes[i + 2] === 0x84) {
+                            const view = new DataView(buf, i + 3, 4);
+                            view.setFloat32(0, durationMs, false);
+                            return new Blob([buf], { type: blob.type });
+                        }
+                    }
+                }
+                return blob;
+            } catch (e) {
+                return blob;
+            }
+        }
+
+        // 秒数を先に0.1秒単位で丸めてから「M:SS.d」および「S.d」に統一変換する（44.3 と 44.4 のような不一致を完全に防止）
+        function roundTenths(seconds) {
+            if (!isFinite(seconds) || isNaN(seconds) || seconds < 0) return 0;
+            return Math.round(seconds * 10) / 10;
+        }
+
+        function formatTimeMMSS(seconds, includeTenths = true) {
+            const totalTenths = Math.max(0, Math.round((isFinite(seconds) ? seconds : 0) * 10));
+            const totalWholeSecs = Math.floor(totalTenths / 10);
+            const tenths = totalTenths % 10;
+            const mins = Math.floor(totalWholeSecs / 60);
+            const secs = (totalWholeSecs % 60).toString().padStart(2, '0');
+            if (includeTenths) {
+                return `${mins}:${secs}.${tenths}`;
+            }
+            return `${mins}:${secs}`;
+        }
+
+        function formatDualTimeLabel(seconds) {
+            const r = roundTenths(seconds);
+            return `${formatTimeMMSS(r, true)} (${r.toFixed(1)}s)`;
+        }
+
+        function syncVideoDurationIfNeeded(newDur, resetDefaultSegment = false) {
+            if (!isFinite(newDur) || isNaN(newDur) || newDur <= 0.1) return;
+            const roundedDur = roundTenths(newDur);
+            if (Math.abs(roundedDur - videoDuration) < 0.05 && !resetDefaultSegment) return;
+
+            const prevDuration = videoDuration;
+            videoDuration = Math.max(0.2, roundedDur);
+
+            const sizeMB = currentFile ? (currentFile.size / (1024 * 1024)).toFixed(2) : '0.00';
+            fileMetaDisplay.textContent = `${sizeMB} MB • ${formatDualTimeLabel(videoDuration)}`;
+            timelineMaxLabel.textContent = formatDualTimeLabel(videoDuration);
+
+            if (resetDefaultSegment) {
+                // 初期状態では15秒で切らず、動画全体（0.0s 〜 末尾）を100%選択状態にする！
+                trimSegments = [{ start: 0, end: videoDuration }];
+            } else {
+                // もし1区間のみで前の末尾と一致していた場合は、新しい動画末尾へ自動追従させる
+                if (trimSegments.length === 1 && trimSegments[0].start === 0 && Math.abs(trimSegments[0].end - prevDuration) <= 0.5) {
+                    trimSegments[0].end = videoDuration;
+                }
+                trimSegments.forEach(seg => {
+                    if (seg.end > videoDuration) {
+                        seg.end = videoDuration;
+                    }
+                    if (seg.start >= seg.end) {
+                        seg.start = roundTenths(Math.max(0, seg.end - 0.5));
+                    }
+                });
+            }
+
+            renderSegments();
+            updateTimelinePlayhead();
+        }
+
+        // 動画プレイヤーの再生位置と下のタイムラインバーの赤いピン（プレイヘッド）を60fpsで滑らかに完全同期
+        let playheadRafId = null;
+        function startPlayheadSyncLoop() {
+            if (playheadRafId) cancelAnimationFrame(playheadRafId);
+            const loop = () => {
+                updateTimelinePlayhead();
+                if (!sourceVideo.paused && !sourceVideo.ended) {
+                    playheadRafId = requestAnimationFrame(loop);
+                }
+            };
+            playheadRafId = requestAnimationFrame(loop);
+        }
+
+        sourceVideo.addEventListener('play', startPlayheadSyncLoop);
+        sourceVideo.addEventListener('pause', () => {
+            if (playheadRafId) cancelAnimationFrame(playheadRafId);
+            updateTimelinePlayhead();
+        });
+
+        sourceVideo.addEventListener('timeupdate', () => {
+            if (isFinite(sourceVideo.duration) && sourceVideo.duration > 0.5 && Math.abs(sourceVideo.duration - videoDuration) >= 0.15) {
+                syncVideoDurationIfNeeded(sourceVideo.duration, false);
+            }
+            updateTimelinePlayhead();
+        });
+
+        sourceVideo.addEventListener('durationchange', () => {
+            if (isFinite(sourceVideo.duration) && sourceVideo.duration > 0.5) {
+                syncVideoDurationIfNeeded(sourceVideo.duration, false);
+            }
+        });
+
+        sourceVideo.addEventListener('seeked', () => {
+            updateTimelinePlayhead();
+        });
+
+        function updateTimelinePlayhead() {
+            const cur = roundTenths(sourceVideo.currentTime || 0);
+            // 再生位置が万が一現在のvideoDurationを超えた場合は即座に総尺を拡張してバーの飛び出しを防ぐ
+            if (cur > videoDuration && isFinite(cur)) {
+                syncVideoDurationIfNeeded(cur, false);
+            }
+            const curLabel = document.getElementById('timelineCurrentLabel');
+            if (curLabel) {
+                curLabel.textContent = formatDualTimeLabel(cur);
+            }
+            const playhead = document.getElementById('timelinePlayhead');
+            if (playhead && videoDuration > 0) {
+                const pct = Math.max(0, Math.min(100, ((sourceVideo.currentTime || 0) / videoDuration) * 100));
+                playhead.style.left = `${pct}%`;
+            }
+        }
+
+        // タイムラインバーをクリックまたは左右ドラッグ（スクラブ）して動画の再生位置を直感的に動かせるようにする
+        let isScrubbingTimeline = false;
+        function seekFromTimelineEvent(e) {
+            if (!currentFile || videoDuration <= 0) return;
+            const rect = timelineVisualizer.getBoundingClientRect();
+            if (rect.width <= 0) return;
+            const clickX = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
+            const ratio = clickX / rect.width;
+            const targetTime = roundTenths(ratio * videoDuration);
+            sourceVideo.currentTime = targetTime;
+            updateTimelinePlayhead();
+        }
+
+        function onTimelinePointerDown(e) {
+            if (!currentFile || videoDuration <= 0) return;
+            isScrubbingTimeline = true;
+            if (timelineVisualizer.setPointerCapture) {
+                try { timelineVisualizer.setPointerCapture(e.pointerId); } catch (_) {}
+            }
+            seekFromTimelineEvent(e);
+
+            const onMove = (moveEvent) => {
+                if (!isScrubbingTimeline) return;
+                seekFromTimelineEvent(moveEvent);
+            };
+            const onUp = (upEvent) => {
+                isScrubbingTimeline = false;
+                window.removeEventListener('pointermove', onMove);
+                window.removeEventListener('pointerup', onUp);
+            };
+            window.addEventListener('pointermove', onMove);
+            window.addEventListener('pointerup', onUp);
+        }
+
+        // メインの sourceVideo 自身の duration が Infinity になっている場合、sourceVideo 自体を一度末尾へシークしてブラウザのネイティブシークバーも正常化する
+        function calibrateMainVideoDuration(videoEl, fallbackDur) {
+            return new Promise((resolve) => {
+                if (isFinite(videoEl.duration) && videoEl.duration > 0.2) {
+                    resolve(videoEl.duration);
+                    return;
+                }
+                let done = false;
+                const finish = (d) => {
+                    if (done) return;
+                    done = true;
+                    videoEl.removeEventListener('timeupdate', onTimeUpdate);
+                    videoEl.removeEventListener('durationchange', onDurChange);
+                    resolve(d);
+                };
+
+                const onDurChange = () => {
+                    if (isFinite(videoEl.duration) && videoEl.duration > 0.2 && videoEl.duration < 1e9) {
+                        const detected = videoEl.duration;
+                        videoEl.currentTime = 0;
+                        finish(detected);
+                    }
+                };
+
+                const onTimeUpdate = () => {
+                    if (videoEl.currentTime > 0) {
+                        const detected = (isFinite(videoEl.duration) && videoEl.duration < 1e9)
+                            ? videoEl.duration
+                            : videoEl.currentTime;
+                        videoEl.currentTime = 0;
+                        finish(detected);
+                    }
+                };
+
+                videoEl.addEventListener('durationchange', onDurChange);
+                videoEl.addEventListener('timeupdate', onTimeUpdate);
+                try {
+                    videoEl.currentTime = 1e10;
+                } catch (_) {
+                    finish(fallbackDur || 10);
+                }
+                setTimeout(() => {
+                    if (!done) {
+                        const d = (isFinite(videoEl.duration) && videoEl.duration < 1e9) ? videoEl.duration : (fallbackDur || 10);
+                        try { videoEl.currentTime = 0; } catch (_) {}
+                        finish(d);
+                    }
+                }, 1200);
+            });
+        }
+
+        function handleFileSelect(file, fallbackDuration = null) {
+            hideNotification();
+            currentFile = file;
+            
+            const url = URL.createObjectURL(file);
+            sourceVideo.src = url;
+            sourceVideo.load();
+
+            fileNameDisplay.textContent = file.name;
+
+            sourceVideo.onloadedmetadata = async () => {
+                let dur = await calibrateMainVideoDuration(sourceVideo, fallbackDuration);
+                if (!isFinite(dur) || isNaN(dur) || dur <= 0) {
+                    dur = fallbackDuration || 10;
+                }
+
+                syncVideoDurationIfNeeded(dur, true);
+
+                dropzone.classList.add('hidden');
+                previewCard.classList.remove('hidden');
+                resultCard.classList.add('hidden');
+
+                convertBtn.disabled = false;
+                updateConvertButtonLabel();
+            };
+
+            sourceVideo.onerror = () => {
+                showNotification(
+                    'ファイルの読み込みエラー',
+                    'このファイルのコーデックはお使いのブラウザで直接デコードできない形式です。一般的なMP4やWebM、MOVファイルをお試しください。',
+                    'error'
+                );
+            };
+        }
+
+        // --- 複数区間トリミング管理 ---
+        function renderSegments() {
+            segmentsContainer.innerHTML = '';
+
+            trimSegments.forEach((seg, idx) => {
+                const segLength = Math.max(0.1, roundTenths(seg.end - seg.start)).toFixed(1);
+                const row = document.createElement('div');
+                row.className = 'bg-white border border-slate-200 rounded-2xl p-3 flex flex-col gap-2 shadow-sm transition-all hover:border-accent/60';
+                row.innerHTML = `
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <span class="w-5 h-5 rounded-full bg-accent text-white text-[11px] font-bold flex items-center justify-center">
+                                ${idx + 1}
+                            </span>
+                            <span class="text-xs font-bold text-slate-700">区間 #${idx + 1}</span>
+                            <span class="text-[11px] font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">
+                                ${formatTimeMMSS(seg.start, true)} 〜 ${formatTimeMMSS(seg.end, true)} (${segLength}秒間)
+                            </span>
+                        </div>
+                        <div class="flex items-center gap-1">
+                            <button type="button" onclick="previewSegment(${idx})" class="text-[11px] font-medium text-accent-dark hover:bg-accent-light px-2 py-1 rounded-lg flex items-center gap-0.5 transition-colors" title="この区間の開始位置を再生確認">
+                                <span class="material-symbols-rounded text-sm">play_arrow</span>先頭へ移動
+                            </button>
+                            ${trimSegments.length > 1 ? `
+                                <button type="button" onclick="removeTrimSegment(${idx})" class="text-slate-400 hover:text-red-500 hover:bg-red-50 p-1 rounded-lg transition-colors" title="この区間を削除">
+                                    <span class="material-symbols-rounded text-base">delete</span>
+                                </button>
+                            ` : ''}
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <div class="flex justify-between text-[11px] text-slate-500 mb-1">
+                                <span>開始: <strong class="text-slate-700 font-mono">${formatDualTimeLabel(seg.start)}</strong></span>
+                                <button type="button" onclick="setCurrentTimeForSegment(${idx}, 'start')" class="text-accent hover:underline font-semibold">現在位置をセット</button>
+                            </div>
+                            <input type="number" min="0" max="${videoDuration.toFixed(1)}" step="0.1" value="${seg.start.toFixed(1)}"
+                                onchange="updateSegmentValue(${idx}, 'start', this.value)"
+                                class="w-full bg-slate-50 border border-slate-300 rounded-xl px-2.5 py-1.5 text-xs font-semibold focus:outline-none focus:border-accent focus:bg-white">
+                        </div>
+                        <div>
+                            <div class="flex justify-between text-[11px] text-slate-500 mb-1">
+                                <span>終了: <strong class="text-slate-700 font-mono">${formatDualTimeLabel(seg.end)}</strong></span>
+                                <button type="button" onclick="setCurrentTimeForSegment(${idx}, 'end')" class="text-accent hover:underline font-semibold">現在位置をセット</button>
+                            </div>
+                            <input type="number" min="0.1" max="${videoDuration.toFixed(1)}" step="0.1" value="${seg.end.toFixed(1)}"
+                                onchange="updateSegmentValue(${idx}, 'end', this.value)"
+                                class="w-full bg-slate-50 border border-slate-300 rounded-xl px-2.5 py-1.5 text-xs font-semibold focus:outline-none focus:border-accent focus:bg-white">
+                        </div>
+                    </div>
+                `;
+                segmentsContainer.appendChild(row);
+            });
+
+            updateDurationSummary();
+        }
+
+        function updateSegmentValue(index, field, rawValue) {
+            const seg = trimSegments[index];
+            if (!seg) return;
+            let val = parseFloat(rawValue);
+            if (isNaN(val)) val = 0;
+
+            if (field === 'start') {
+                val = Math.max(0, Math.min(val, videoDuration - 0.1));
+                seg.start = roundTenths(val);
+                if (seg.end <= seg.start) {
+                    seg.end = roundTenths(Math.min(videoDuration, seg.start + 0.5));
+                }
+                sourceVideo.currentTime = seg.start;
+            } else {
+                val = Math.max(0.1, Math.min(val, videoDuration));
+                seg.end = roundTenths(val);
+                if (seg.start >= seg.end) {
+                    seg.start = roundTenths(Math.max(0, seg.end - 0.5));
+                }
+                sourceVideo.currentTime = seg.end;
+            }
+            renderSegments();
+            updateTimelinePlayhead();
+        }
+
+        function setCurrentTimeForSegment(index, field) {
+            if (!currentFile) return;
+            const current = roundTenths(sourceVideo.currentTime);
+            updateSegmentValue(index, field, current);
+        }
+
+        // 現在の再生位置（赤いピン）がある区間を2つに分割する便利機能
+        function splitSegmentAtCurrentTime() {
+            if (!currentFile || videoDuration <= 0) return;
+            const cur = roundTenths(sourceVideo.currentTime || 0);
+            const targetIdx = trimSegments.findIndex(s => cur > s.start + 0.2 && cur < s.end - 0.2);
+            if (targetIdx === -1) {
+                showNotification(
+                    '分割位置の案内',
+                    '動画を再生またはタイムラインバーをクリックして、分割したい区間の中間（開始・終了から0.2秒以上内側）に赤いピンを合わせてから押してください。',
+                    'info'
+                );
+                return;
+            }
+            const orig = trimSegments[targetIdx];
+            const firstPart = { start: orig.start, end: cur };
+            const secondPart = { start: cur, end: orig.end };
+            trimSegments.splice(targetIdx, 1, firstPart, secondPart);
+            renderSegments();
+        }
+
+        function addTrimSegment() {
+            if (!currentFile) return;
+            const lastSeg = trimSegments[trimSegments.length - 1];
+            let newStart = lastSeg ? roundTenths(Math.min(videoDuration - 0.5, lastSeg.end)) : 0;
+            if (newStart < 0 || newStart >= videoDuration - 0.2) newStart = 0;
+            let newEnd = roundTenths(Math.min(videoDuration, newStart + Math.max(2, videoDuration * 0.2)));
+            if (newEnd <= newStart) {
+                newStart = 0;
+                newEnd = videoDuration;
+            }
+            trimSegments.push({ start: newStart, end: newEnd });
+            renderSegments();
+            segmentsContainer.scrollTop = segmentsContainer.scrollHeight;
+        }
+
+        function removeTrimSegment(index) {
+            if (trimSegments.length <= 1) return;
+            trimSegments.splice(index, 1);
+            renderSegments();
+        }
+
+        function previewSegment(index) {
+            const seg = trimSegments[index];
+            if (!seg || !currentFile) return;
+            sourceVideo.currentTime = seg.start;
+            sourceVideo.play();
+        }
+
+        function getValidSegments() {
+            return trimSegments
+                .map(s => ({
+                    start: Math.max(0, Math.min(videoDuration, Number(s.start) || 0)),
+                    end: Math.max(0.1, Math.min(videoDuration, Number(s.end) || videoDuration))
+                }))
+                .filter(s => s.end > s.start + 0.05);
+        }
+
+        function updateDurationSummary() {
+            const valid = getValidSegments();
+            const totalDuration = valid.reduce((acc, s) => acc + (s.end - s.start), 0);
+            durationBadge.textContent = `合計: ${roundTenths(totalDuration).toFixed(1)}秒 (${valid.length}区間)`;
+
+            // タイムラインバーの描画
+            timelineVisualizer.innerHTML = '';
+            if (videoDuration > 0) {
+                valid.forEach((seg, idx) => {
+                    const leftPct = Math.max(0, Math.min(100, (seg.start / videoDuration) * 100));
+                    const widthPct = Math.max(0.5, Math.min(100 - leftPct, ((seg.end - seg.start) / videoDuration) * 100));
+                    const bar = document.createElement('div');
+                    bar.className = 'absolute top-0 bottom-0 bg-accent/85 border-x border-white/90 flex items-center justify-center text-[10px] font-bold text-white overflow-hidden pointer-events-none';
+                    bar.style.left = `${leftPct}%`;
+                    bar.style.width = `${widthPct}%`;
+                    bar.title = `区間 #${idx + 1}: ${formatDualTimeLabel(seg.start)} 〜 ${formatDualTimeLabel(seg.end)}`;
+                    if (widthPct > 4) bar.textContent = `#${idx + 1}`;
+                    timelineVisualizer.appendChild(bar);
+                });
+
+                // 動画プレイヤーの現在再生位置を示す赤いピン（プレイヘッド）を描画
+                const playhead = document.createElement('div');
+                playhead.id = 'timelinePlayhead';
+                playhead.className = 'absolute top-0 bottom-0 w-1 -ml-0.5 bg-red-500 shadow-[0_0_6px_rgba(239,68,68,1)] z-20 pointer-events-none';
+                const curPct = Math.max(0, Math.min(100, ((sourceVideo.currentTime || 0) / videoDuration) * 100));
+                playhead.style.left = `${curPct}%`;
+                timelineVisualizer.appendChild(playhead);
+            }
+        }
+
+        // --- フォーマット選択切り替え ---
+        formatLabels.forEach(label => {
+            label.addEventListener('click', () => {
+                if (isConverting) return;
+                const format = label.getAttribute('data-format');
+                currentFormat = format;
+
+                formatLabels.forEach(l => {
+                    const isSelected = l === label;
+                    l.classList.toggle('border-accent', isSelected);
+                    l.classList.toggle('bg-accent-light/50', isSelected);
+                    l.classList.toggle('border-slate-200', !isSelected);
+
+                    const iconBox = l.querySelector('.icon-box');
+                    if (iconBox) {
+                        iconBox.classList.toggle('bg-accent', isSelected);
+                        iconBox.classList.toggle('text-white', isSelected);
+                        iconBox.classList.toggle('bg-slate-100', !isSelected);
+                        iconBox.classList.toggle('text-slate-600', !isSelected);
+                    }
+
+                    const checkIcon = l.querySelector('.check-icon');
+                    if (checkIcon) {
+                        checkIcon.textContent = isSelected ? 'radio_button_checked' : 'radio_button_unchecked';
+                        checkIcon.classList.toggle('text-accent', isSelected);
+                        checkIcon.classList.toggle('text-slate-300', !isSelected);
+                    }
+                });
+
+                // パネル表示切替
+                if (format === 'gif') {
+                    gifSettingsPanel.classList.remove('hidden');
+                    videoSettingsPanel.classList.add('hidden');
+                } else {
+                    gifSettingsPanel.classList.add('hidden');
+                    videoSettingsPanel.classList.remove('hidden');
+
+                    if (format === 'webm') {
+                        subFormatContainer.classList.remove('hidden');
+                        subFormatSelect.innerHTML = `
+                            <option value="webm">WebM ファイル (.webm)</option>
+                            <option value="mkv">Matroska 互換コンテナ (.mkv)</option>
+                        `;
+                    } else if (format === 'audio') {
+                        subFormatContainer.classList.remove('hidden');
+                        subFormatSelect.innerHTML = `
+                            <option value="wav">高音質 WAV オーディオ (.wav - 確実・非圧縮)</option>
+                            <option value="m4a">M4A / AAC オーディオ (.m4a)</option>
+                        `;
+                    } else {
+                        subFormatContainer.classList.add('hidden');
+                    }
+                }
+
+                updateConvertButtonLabel();
+            });
+        });
+
+        function updateConvertButtonLabel() {
+            if (!currentFile) {
+                convertBtnText.textContent = '動画ファイルを選択してください';
+                return;
+            }
+            const names = {
+                'gif': 'GIFアニメーションに変換する',
+                'mp4': 'MP4動画に変換する',
+                'webm': 'WebM / MKVに変換する',
+                'audio': '音声ファイルへ変換・抽出する'
+            };
+            convertBtnText.textContent = names[currentFormat] || '変換を開始する';
+        }
+
+        // --- スライダーラベル更新 ---
+        gifWidthSelect.addEventListener('change', () => {
+            gifWidthLabel.textContent = gifWidthSelect.options[gifWidthSelect.selectedIndex].text;
+        });
+        gifFpsInput.addEventListener('input', () => {
+            gifFpsLabel.textContent = `${gifFpsInput.value} FPS`;
+        });
+        bitrateSelect.addEventListener('change', () => {
+            bitrateLabel.textContent = bitrateSelect.options[bitrateSelect.selectedIndex].text;
+        });
+
+        // --- 進捗更新ヘルパー ---
+        function setProgress(percent, statusText) {
+            const p = Math.min(100, Math.max(0, Math.round(percent)));
+            progressBar.style.width = `${p}%`;
+            progressPercentText.textContent = `${p}%`;
+            if (statusText) {
+                progressStatusText.innerHTML = `<span class="material-symbols-rounded text-base animate-spin">progress_activity</span> ${statusText}`;
+            }
+        }
+
+        // --- 変換メイン処理 ---
+        convertBtn.addEventListener('click', async () => {
+            if (!currentFile || isConverting) return;
+
+            const segments = getValidSegments();
+            if (segments.length === 0) {
+                showNotification('区間設定エラー', '有効なトリミング区間を1つ以上指定してください。', 'error');
+                return;
+            }
+
+            hideNotification();
+            isConverting = true;
+            convertBtn.disabled = true;
+            resultCard.classList.add('hidden');
+            progressContainer.classList.remove('hidden');
+            sourceVideo.pause();
+
+            try {
+                if (currentFormat === 'gif') {
+                    await convertToGif(segments);
+                } else if (currentFormat === 'audio' && subFormatSelect.value === 'wav') {
+                    await convertToWavAudio(segments);
+                } else {
+                    await convertViaMediaStream(segments, currentFormat);
+                }
+            } catch (err) {
+                console.error(err);
+                showNotification('変換中にエラーが発生しました', err.message || '別の設定またはフォーマットでお試しください。', 'error');
+            } finally {
+                isConverting = false;
+                convertBtn.disabled = false;
+                progressContainer.classList.add('hidden');
+            }
+        });
+
+        // --- 1. GIFアニメーション変換 (複数区間結合・内蔵GIF89aエンコーダー) ---
+        async function convertToGif(segments) {
+            const origW = sourceVideo.videoWidth || 640;
+            const origH = sourceVideo.videoHeight || 360;
+            const widthVal = gifWidthSelect.value;
+            const targetWidth = widthVal === 'original' ? origW : (parseInt(widthVal, 10) || 640);
+            const fps = parseInt(gifFpsInput.value, 10) || 10;
+            const totalDuration = Math.max(0.2, segments.reduce((sum, s) => sum + (s.end - s.start), 0));
+
+            const targetHeight = Math.round((origH / origW) * targetWidth);
+
+            renderCanvas.width = targetWidth;
+            renderCanvas.height = targetHeight;
+            const ctx = renderCanvas.getContext('2d', { willReadFrequently: true });
+
+            // 高解像度・高FPSにも対応できるようフレーム上限を拡張（最大900フレーム）
+            const maxFrames = 900;
+            const idealFrames = Math.ceil(totalDuration * fps);
+            const effectiveFps = idealFrames > maxFrames ? (maxFrames / totalDuration) : fps;
+            const step = 1 / effectiveFps;
+            // GIF89a仕様上、最小ディレイは2 (2/100秒 = 50FPS)。1以下はブラウザで10FPSに強制低下するため2を下限とする
+            const delayCs = Math.max(2, Math.round(100 / effectiveFps));
+
+            const frameTimes = [];
+            for (const seg of segments) {
+                for (let t = seg.start; t < seg.end; t += step) {
+                    frameTimes.push(Math.min(seg.end, t));
+                }
+            }
+            if (frameTimes.length === 0) {
+                frameTimes.push(segments[0].start);
+            }
+
+            const totalFrames = frameTimes.length;
+            const encoder = new LocalGifEncoder(targetWidth, targetHeight, delayCs);
+
+            setProgress(5, `複数区間からフレームを抽出・結合中 (0/${totalFrames})...`);
+
+            // 順番にシークしてフレームをキャプチャ＆直接GIFフレームとして追加
+            for (let i = 0; i < totalFrames; i++) {
+                const t = frameTimes[i];
+                await seekVideo(sourceVideo, t);
+                ctx.drawImage(sourceVideo, 0, 0, targetWidth, targetHeight);
+                const imgData = ctx.getImageData(0, 0, targetWidth, targetHeight).data;
+                encoder.addFrame(imgData);
+
+                const pct = Math.round(((i + 1) / totalFrames) * 95);
+                setProgress(pct, `GIFフレームを結合生成中 (${i + 1}/${totalFrames})...`);
+                await new Promise(r => setTimeout(r, 0));
+            }
+
+            setProgress(98, 'GIFファイルをファイナライズ中...');
+            const blob = encoder.finish();
+            setProgress(100, '完了！');
+            showConversionResult(blob, 'gif', 'image');
+        }
+
+        // --- 内蔵軽量GIF89aエンコーダー (Uint8Arrayバッファリングによる省メモリ・高解像度対応版) ---
+        class LocalGifEncoder {
+            constructor(width, height, delayCs = 10) {
+                this.width = width;
+                this.height = height;
+                this.delayCs = delayCs;
+                this.parts = []; // Blobパーツ配列（長尺・FullHDでもメモリ圧迫しない）
+                this.buffer = new Uint8Array(65536);
+                this.bufIdx = 0;
+                this.initHeader();
+            }
+
+            flushBuffer() {
+                if (this.bufIdx > 0) {
+                    this.parts.push(this.buffer.slice(0, this.bufIdx));
+                    this.bufIdx = 0;
+                }
+            }
+
+            writeByte(b) {
+                this.buffer[this.bufIdx++] = b & 0xff;
+                if (this.bufIdx >= this.buffer.length) {
+                    this.flushBuffer();
+                }
+            }
+
+            writeBytes(arr, len) {
+                for (let i = 0; i < len; i++) {
+                    this.writeByte(arr[i]);
+                }
+            }
+
+            writeShort(s) {
+                this.writeByte(s & 0xff);
+                this.writeByte((s >> 8) & 0xff);
+            }
+
+            writeString(str) {
+                for (let i = 0; i < str.length; i++) {
+                    this.writeByte(str.charCodeAt(i));
+                }
+            }
+
+            initHeader() {
+                // Header (GIF89a)
+                this.writeString('GIF89a');
+                // Logical Screen Descriptor
+                this.writeShort(this.width);
+                this.writeShort(this.height);
+                this.writeByte(0xf7); // Global Color Table Flag (1), Color Res (7), Sort (0), Size of GCT (7 -> 256色)
+                this.writeByte(0);    // Background Color Index
+                this.writeByte(0);    // Pixel Aspect Ratio
+
+                // Global Color Table (3-3-2 RGB固定ユニフォームパレット 256色)
+                for (let i = 0; i < 256; i++) {
+                    const r = (i >> 5) & 0x07;
+                    const g = (i >> 2) & 0x07;
+                    const b = i & 0x03;
+                    this.writeByte(Math.round((r * 255) / 7));
+                    this.writeByte(Math.round((g * 255) / 7));
+                    this.writeByte(Math.round((b * 255) / 3));
+                }
+
+                // Netscape Application Extension (無限ループ設定)
+                this.writeByte(0x21);
+                this.writeByte(0xff);
+                this.writeByte(11);
+                this.writeString('NETSCAPE2.0');
+                this.writeByte(3);
+                this.writeByte(1);
+                this.writeShort(0); // 0 = 無限ループ
+                this.writeByte(0);
+            }
+
+            addFrame(rgbaData) {
+                // Graphic Control Extension
+                this.writeByte(0x21);
+                this.writeByte(0xf9);
+                this.writeByte(4);
+                this.writeByte(0x00); // Disposal method
+                this.writeShort(this.delayCs);
+                this.writeByte(0);    // Transparent color index
+                this.writeByte(0);
+
+                // Image Descriptor
+                this.writeByte(0x2c);
+                this.writeShort(0);
+                this.writeShort(0);
+                this.writeShort(this.width);
+                this.writeShort(this.height);
+                this.writeByte(0x00); // Local Color Tableなし
+
+                // ピクセルを256色パレットインデックスに変換 (簡易ディザリング付きでバンディングを軽減)
+                const numPixels = this.width * this.height;
+                const indexedPixels = new Uint8Array(numPixels);
+                let p = 0;
+                for (let i = 0; i < numPixels; i++) {
+                    const dither = ((i % 2) ^ (Math.floor(i / this.width) % 2)) * 8 - 4;
+                    const r = Math.min(255, Math.max(0, rgbaData[p] + dither)) >> 5;
+                    const g = Math.min(255, Math.max(0, rgbaData[p + 1] + dither)) >> 5;
+                    const b = Math.min(255, Math.max(0, rgbaData[p + 2] + dither)) >> 6;
+                    indexedPixels[i] = (r << 5) | (g << 2) | b;
+                    p += 4;
+                }
+
+                // LZWエンコード実行
+                this.writeLZW(indexedPixels);
+            }
+
+            writeLZW(indexedPixels) {
+                const minCodeSize = 8;
+                this.writeByte(minCodeSize);
+
+                const clearCode = 1 << minCodeSize;
+                const eoiCode = clearCode + 1;
+                let codeSize = minCodeSize + 1;
+                let nextCode = eoiCode + 1;
+
+                // 高速ルックアップ用フラットテーブル (4096 * 256)
+                const prefixTable = new Int32Array(4096 * 256);
+                prefixTable.fill(-1);
+
+                const subBlock = new Uint8Array(255);
+                let subBlockLen = 0;
+                let bitBuffer = 0;
+                let bitCount = 0;
+
+                const flushSubBlock = () => {
+                    if (subBlockLen > 0) {
+                        this.writeByte(subBlockLen);
+                        this.writeBytes(subBlock, subBlockLen);
+                        subBlockLen = 0;
+                    }
+                };
+
+                const emitCode = (code) => {
+                    bitBuffer |= (code << bitCount);
+                    bitCount += codeSize;
+                    while (bitCount >= 8) {
+                        subBlock[subBlockLen++] = bitBuffer & 0xff;
+                        if (subBlockLen === 255) {
+                            flushSubBlock();
+                        }
+                        bitBuffer >>= 8;
+                        bitCount -= 8;
+                    }
+                };
+
+                emitCode(clearCode);
+
+                let prefix = indexedPixels[0];
+                const len = indexedPixels.length;
+
+                for (let i = 1; i < len; i++) {
+                    const k = indexedPixels[i];
+                    const tableIdx = (prefix << 8) | k;
+                    const existing = prefixTable[tableIdx];
+
+                    if (existing !== -1) {
+                        prefix = existing;
+                    } else {
+                        emitCode(prefix);
+                        if (nextCode < 4096) {
+                            prefixTable[tableIdx] = nextCode++;
+                            if (nextCode > (1 << codeSize) && codeSize < 12) {
+                                codeSize++;
+                            }
+                        } else {
+                            emitCode(clearCode);
+                            prefixTable.fill(-1);
+                            codeSize = minCodeSize + 1;
+                            nextCode = eoiCode + 1;
+                        }
+                        prefix = k;
+                    }
+                }
+
+                emitCode(prefix);
+                emitCode(eoiCode);
+
+                if (bitCount > 0) {
+                    subBlock[subBlockLen++] = bitBuffer & 0xff;
+                }
+                flushSubBlock();
+
+                // Block Terminator
+                this.writeByte(0x00);
+            }
+
+            finish() {
+                // GIF Trailer
+                this.writeByte(0x3b);
+                this.flushBuffer();
+                return new Blob(this.parts, { type: 'image/gif' });
+            }
+        }
+
+        function seekVideo(videoEl, timeInSeconds) {
+            return new Promise((resolve) => {
+                const onSeeked = () => {
+                    videoEl.removeEventListener('seeked', onSeeked);
+                    resolve();
+                };
+                videoEl.addEventListener('seeked', onSeeked);
+                videoEl.currentTime = Math.min(videoEl.duration || timeInSeconds, timeInSeconds);
+            });
+        }
+
+        // --- 2. WAV音声抽出 (複数区間を結合して1つのWAVファイルに出力) ---
+        async function convertToWavAudio(segments) {
+            setProgress(20, '音声データを読み込み中...');
+            const arrayBuffer = await currentFile.arrayBuffer();
+
+            setProgress(45, 'オーディオトラックをデコード中...');
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            let audioBuffer;
+            try {
+                audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+            } catch (e) {
+                throw new Error('この動画には音声トラックが含まれていないか、未対応の音声形式です。');
+            }
+
+            setProgress(75, `指定された ${segments.length} 区間を結合してWAV形式に変換中...`);
+            const sampleRate = audioBuffer.sampleRate;
+            const frameRanges = segments.map(seg => {
+                const startFrame = Math.max(0, Math.floor(seg.start * sampleRate));
+                const endFrame = Math.min(audioBuffer.length, Math.floor(seg.end * sampleRate));
+                return { startFrame, count: Math.max(0, endFrame - startFrame) };
+            }).filter(r => r.count > 0);
+
+            const wavBuffer = encodeWAVMultiSegments(audioBuffer, frameRanges);
+            const blob = new Blob([wavBuffer], { type: 'audio/wav' });
+
+            setProgress(100, '完了！');
+            showConversionResult(blob, 'wav', 'audio');
+        }
+
+        function encodeWAVMultiSegments(audioBuffer, frameRanges) {
+            const numChannels = audioBuffer.numberOfChannels;
+            const sampleRate = audioBuffer.sampleRate;
+            const bytesPerSample = 2; // 16-bit PCM
+            const blockAlign = numChannels * bytesPerSample;
+            const totalFrames = frameRanges.reduce((acc, r) => acc + r.count, 0);
+            const buffer = new ArrayBuffer(44 + totalFrames * blockAlign);
+            const view = new DataView(buffer);
+
+            const writeString = (offset, string) => {
+                for (let i = 0; i < string.length; i++) {
+                    view.setUint8(offset + i, string.charCodeAt(i));
+                }
+            };
+
+            writeString(0, 'RIFF');
+            view.setUint32(4, 36 + totalFrames * blockAlign, true);
+            writeString(8, 'WAVE');
+            writeString(12, 'fmt ');
+            view.setUint32(16, 16, true);
+            view.setUint16(20, 1, true);
+            view.setUint16(22, numChannels, true);
+            view.setUint32(24, sampleRate, true);
+            view.setUint32(28, sampleRate * blockAlign, true);
+            view.setUint16(32, blockAlign, true);
+            view.setUint16(34, 16, true);
+            writeString(36, 'data');
+            view.setUint32(40, totalFrames * blockAlign, true);
+
+            const channels = [];
+            for (let c = 0; c < numChannels; c++) {
+                channels.push(audioBuffer.getChannelData(c));
+            }
+
+            let offset = 44;
+            for (const range of frameRanges) {
+                for (let i = 0; i < range.count; i++) {
+                    for (let c = 0; c < numChannels; c++) {
+                        let sample = channels[c][range.startFrame + i] || 0;
+                        sample = Math.max(-1, Math.min(1, sample));
+                        view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7FFF, true);
+                        offset += 2;
+                    }
+                }
+            }
+            return buffer;
+        }
+
+        // --- 3. 動画フォーマット変換 (複数区間を1本の動画・音声ストリームに結合録画) ---
+        async function convertViaMediaStream(segments, formatCategory) {
+            const bitrate = parseInt(bitrateSelect.value, 10) || 2500000;
+            let ext = 'mp4';
+            let mimeCandidates = [];
+
+            if (formatCategory === 'mp4') {
+                ext = 'mp4';
+                mimeCandidates = ['video/mp4;codecs=avc1', 'video/mp4', 'video/webm;codecs=h264', 'video/webm'];
+            } else if (formatCategory === 'webm') {
+                ext = subFormatSelect.value || 'webm';
+                mimeCandidates = ['video/x-matroska;codecs=avc1', 'video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
+            } else if (formatCategory === 'audio') {
+                ext = 'm4a';
+                mimeCandidates = ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm'];
+            }
+
+            let selectedMime = '';
+            for (const m of mimeCandidates) {
+                if (window.MediaRecorder && MediaRecorder.isTypeSupported(m)) {
+                    selectedMime = m;
+                    break;
+                }
+            }
+
+            // 独立したクローンVideo要素で複数区間を順番にシーク＆再生し、1つのストリームに結合
+            const tempVideo = document.createElement('video');
+            tempVideo.src = sourceVideo.src;
+            tempVideo.muted = false;
+            tempVideo.volume = 0.001; // スピーカー出力を最小限にしつつ音声トラックを維持
+            tempVideo.playsInline = true;
+
+            await new Promise((res) => {
+                tempVideo.onloadedmetadata = res;
+                tempVideo.load();
+            });
+
+            await seekVideo(tempVideo, segments[0].start);
+
+            const stream = tempVideo.captureStream ? tempVideo.captureStream() : (tempVideo.mozCaptureStream ? tempVideo.mozCaptureStream() : null);
+            if (!stream) {
+                throw new Error('お使いのブラウザ環境ではMediaStreamキャプチャがサポートされていません。');
+            }
+
+            let targetStream = stream;
+
+            if (formatCategory === 'audio') {
+                const audioTracks = stream.getAudioTracks();
+                if (audioTracks.length === 0) {
+                    throw new Error('音声トラックが検出されませんでした。WAV形式を選択するか音声付きの動画をお試しください。');
+                }
+                targetStream = new MediaStream(audioTracks);
+            }
+
+            const options = selectedMime ? { mimeType: selectedMime, videoBitsPerSecond: bitrate } : { videoBitsPerSecond: bitrate };
+            const recorder = new MediaRecorder(targetStream, options);
+            const chunks = [];
+
+            recorder.ondataavailable = (e) => {
+                if (e.data && e.data.size > 0) chunks.push(e.data);
+            };
+
+            const totalDuration = Math.max(0.2, segments.reduce((sum, s) => sum + (s.end - s.start), 0));
+            let completedDuration = 0;
+
+            recorder.start(100);
+
+            for (let idx = 0; idx < segments.length; idx++) {
+                const seg = segments[idx];
+                const segDuration = Math.max(0.1, seg.end - seg.start);
+
+                if (idx > 0) {
+                    if (recorder.state === 'recording' && recorder.pause) {
+                        recorder.pause();
+                    }
+                    await seekVideo(tempVideo, seg.start);
+                    if (recorder.state === 'paused' && recorder.resume) {
+                        recorder.resume();
+                    }
+                }
+
+                await new Promise((resolveSeg, rejectSeg) => {
+                    recorder.onerror = (e) => rejectSeg(e.error || new Error('録画処理中にエラーが発生しました'));
+                    tempVideo.play();
+
+                    const checkInterval = setInterval(() => {
+                        const segElapsed = Math.max(0, tempVideo.currentTime - seg.start);
+                        const overallElapsed = completedDuration + Math.min(segDuration, segElapsed);
+                        const pct = Math.min(99, Math.round((overallElapsed / totalDuration) * 100));
+
+                        setProgress(
+                            pct,
+                            `${ext.toUpperCase()}結合エンコード中 [区間 ${idx + 1}/${segments.length}] (${overallElapsed.toFixed(1)}s / ${totalDuration.toFixed(1)}s)`
+                        );
+
+                        if (tempVideo.currentTime >= seg.end || tempVideo.ended) {
+                            clearInterval(checkInterval);
+                            tempVideo.pause();
+                            resolveSeg();
+                        }
+                    }, 80);
+                });
+
+                completedDuration += segDuration;
+            }
+
+            await new Promise((resolveStop) => {
+                recorder.onstop = resolveStop;
+                if (recorder.state !== 'inactive') {
+                    recorder.stop();
+                } else {
+                    resolveStop();
+                }
+            });
+
+            const finalMime = selectedMime || (formatCategory === 'audio' ? 'audio/mp4' : 'video/mp4');
+            const blob = new Blob(chunks, { type: finalMime });
+            showConversionResult(blob, ext, formatCategory === 'audio' ? 'audio' : 'video');
+        }
+
+        // --- 変換結果の表示＆ダウンロード準備 ---
+        function showConversionResult(blob, extension, mediaType) {
+            if (generatedBlobUrl) {
+                URL.revokeObjectURL(generatedBlobUrl);
+            }
+            generatedBlobUrl = URL.createObjectURL(blob);
+
+            resultFormatBadge.textContent = `.${extension.toUpperCase()}`;
+            const sizeMB = (blob.size / (1024 * 1024)).toFixed(2);
+            const sizeKB = (blob.size / 1024).toFixed(0);
+            resultSizeInfo.textContent = `出力サイズ: ${blob.size > 1024 * 1024 ? sizeMB + ' MB' : sizeKB + ' KB'}`;
+
+            // 元ファイル名から拡張子を付け替え
+            const baseName = currentFile ? currentFile.name.replace(/\.[^/.]+$/, '') : 'converted';
+            downloadBtn.href = generatedBlobUrl;
+            downloadBtn.download = `${baseName}_loop.${extension}`;
+
+            resultPreviewContainer.innerHTML = '';
+            if (mediaType === 'image') {
+                const img = document.createElement('img');
+                img.src = generatedBlobUrl;
+                img.alt = 'Converted GIF';
+                img.className = 'max-h-[360px] w-auto rounded-xl object-contain shadow';
+                resultPreviewContainer.appendChild(img);
+            } else if (mediaType === 'video') {
+                const vid = document.createElement('video');
+                vid.src = generatedBlobUrl;
+                vid.controls = true;
+                vid.loop = true;
+                vid.autoplay = true;
+                vid.muted = true;
+                vid.className = 'max-h-[360px] w-auto rounded-xl';
+                resultPreviewContainer.appendChild(vid);
+            } else {
+                const audWrapper = document.createElement('div');
+                audWrapper.className = 'w-full p-6 flex flex-col items-center gap-3 text-white';
+                audWrapper.innerHTML = `<span class="material-symbols-rounded text-5xl text-accent">graphic_eq</span>`;
+                const aud = document.createElement('audio');
+                aud.src = generatedBlobUrl;
+                aud.controls = true;
+                aud.className = 'w-full max-w-md';
+                audWrapper.appendChild(aud);
+                resultPreviewContainer.appendChild(audWrapper);
+            }
+
+            resultCard.classList.remove('hidden');
+            resultCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+    </script>
+</body>
+</html>
